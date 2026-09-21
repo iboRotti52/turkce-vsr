@@ -230,6 +230,37 @@ Agent aşağıdaki koşulların **tamamı** kanıtlanmadan full training başlat
 
 Bu kapı geçilince aynı dondurulmuş model reçetesiyle full training yapılır. Full training sırasında yeni mimari arama, plansız hiperparametre değişikliği veya başka bir pilot kola geçiş yapılmaz. Ciddi bir hata veya temel varsayımı çürüten kanıt çıkarsa araştırma aşamasına açıkça geri dönülür.
 
+
+## 5.2. Large-data veri rejimi (50–100 saat)
+
+Yeni veri rejimi birkaç saatlik c0.4.0 kanıtından ayrı bir araştırma fazıdır. c0.4.0
+historical frozen evidence olarak korunur; yeni dataset geldiğinde önce
+`configs/large_data_research.yaml` ve `src.data.prepare_large_data` akışını uygula.
+
+- Hugging Face datasetini `main`/latest ile sabitleme. Araştırma için immutable
+  40-hex dataset commit revision zorunludur.
+- Yeni accepted manifestten speaker-disjoint train/val/test splitini sıfırdan üret;
+  c0.4.0 split haritasını yeni konuşmacılara genişletme.
+- Test splitini research/model selection sırasında indirme, ölçme veya kararlara
+  geri besleme; candidate dondurulana kadar karantinada tut.
+- Her hipotezi doğrudan full 50–100 saatte koşma. Nested, speaker-diverse
+  10h → 25h → 50h → 100h aşamalarında en ucuz ayırt edici ölçekte başla ve yalnız
+  önceden yazılmış karar kuralı geçerse büyüt.
+- Büyük veri hazır mouth clips olduğu için ham video preprocessing pipeline'ı
+  araştırma altyapısına ekleme. Darboğaz veri loading ise mevcut preprocessed
+  artefakt erişimini iyileştir.
+- Tüm videoları RAM'e preload etme. Duration-aware batching için mevcut
+  `SequenceBucketSampler` kullan; worker/prefetch/pin-memory değerlerini hedef
+  eğitim makinesinde ölçerek ayarla.
+- Uzun eğitim checkpointleri model ağırlığı yanında optimizer, scheduler, AMP
+  scaler, epoch/global step, sampler epoch, RNG state ve provenance taşımalıdır.
+  Resume sırasında dataset id/revision, split hash, code revision veya candidate
+  version değişmişse fail-closed dur.
+- Large-data plan audit edilmeden `c0.5.0` yaşayan candidate'ını açma. Açıldıktan
+  sonra c0.4.0 mimarisini başlangıç prior'ı olarak kullanabilirsin; ancak veri
+  miktarına/konuşmacı çeşitliliğine duyarlı training kararlarını otomatik doğru
+  kabul etme ve gerektiğinde yeniden probe et.
+
 ## 6. Otonomi sınırları
 
 Rutin teknik kararlar için kullanıcıya soru sorma. Kanıta dayalı, güvenli ve geri alınabilir seçimi yap; gerekçesini kaydet ve devam et.
