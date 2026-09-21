@@ -471,6 +471,7 @@ def test_completion_separates_technical_status_from_scientific_verdict(tmp_path)
         surprise="Overall stable; long bucket confidence interval overlaps baseline.",
         updated_belief="The schedule may be scale-sensitive but evidence is not decisive.",
         next_step="Inspect long-bucket failures before considering promotion.",
+        evidence_refs=("artifacts/probe_train_ld010/raw_predictions.jsonl",),
         scale_action=ScaleAction.STOP,
     )
     assert completed.technical_status == "COMPLETED"
@@ -647,6 +648,8 @@ def test_completion_cannot_claim_unvalidated_promotion(tmp_path):
             surprise="",
             updated_belief="Architecture A looks promising.",
             next_step="Consider promotion.",
+            evidence_refs=("artifacts/probe_arch_ld201/metrics.json",),
+            revalidation_trigger="Reopen on a new dataset revision or material subgroup shift.",
             scale_action=ScaleAction.PROMOTE_SCALE,
         )
 
@@ -685,6 +688,11 @@ def test_validated_promotion_creates_parent_child_registry_chain(tmp_path):
         surprise="",
         updated_belief="Alternative encoder is promising.",
         next_step="Promote to 25h for stronger confirmation.",
+        evidence_refs=(
+            "artifacts/probe_arch_ld202/metrics.json",
+            "artifacts/probe_arch_ld202/failures.jsonl",
+        ),
+        revalidation_trigger="Reopen if 25h+ scaling reverses the WER gain or a subgroup regresses.",
     )
     request = PromotionRequest(
         question_id="ARCH-LD-202",
@@ -1006,6 +1014,8 @@ def test_promoted_child_requires_next_rule_before_results(tmp_path):
         surprise="",
         updated_belief="Promising.",
         next_step="Consider 25h.",
+        evidence_refs=("artifacts/probe_arch_ld501/metrics.json",),
+        revalidation_trigger="Reopen if 25h scaling does not preserve the effect.",
     )
     request = PromotionRequest(
         question_id="ARCH-LD-501",
@@ -1112,4 +1122,59 @@ def test_nonfinite_costs_fail_closed():
             plan,
             large_data_plan=_large_data_plan(),
             remaining_budget_usd=5.0,
+        )
+
+
+def test_scoped_accept_requires_revalidation_trigger_and_evidence(tmp_path):
+    tracker = ExperimentTracker(tmp_path / "registry.jsonl")
+    plan = ScaleExperimentPlan(
+        question_id="ARCH-LD-601",
+        candidate_version="c0.5.0",
+        hypothesis="Alternative objective improves alignment.",
+        requested_scale="10h",
+        minimum_sufficient_scale="10h",
+        falsification_criteria="No alignment or WER improvement.",
+        expectation="Lower alignment failures and WER.",
+        information_gain_rationale="10h is sufficient for the first controlled comparison.",
+        why_smaller_scale_is_insufficient="Smoke cannot estimate held-out behavior.",
+        promotion_rule="Promote if WER improves >= 3% and alignment failures decrease.",
+        evidence_scope=EvidenceScope.LARGE_DATA_REGIME.value,
+        estimated_gpu_hours=1.0,
+        estimated_cost_usd=0.5,
+    )
+    started = register_scale_experiment(
+        plan,
+        tracker=tracker,
+        experiment_id="probe_arch_ld601_10h",
+        large_data_plan=_large_data_plan(),
+        setup=_execution_setup(),
+        remaining_budget_usd=5.0,
+    )
+    with pytest.raises(ValueError, match="revalidation_trigger"):
+        complete_scale_experiment(
+            started.experiment_id,
+            tracker=tracker,
+            result={"wer": 0.27},
+            scientific_verdict=ScientificVerdict.ACCEPT,
+            actual_gpu_hours=0.9,
+            actual_cost_usd=0.45,
+            surprise="",
+            updated_belief="The objective appears better in this large-data regime.",
+            next_step="Consider scale promotion.",
+            evidence_refs=("artifacts/probe_arch_ld601/metrics.json",),
+        )
+
+    with pytest.raises(ValueError, match="evidence ref"):
+        complete_scale_experiment(
+            started.experiment_id,
+            tracker=tracker,
+            result={"wer": 0.27},
+            scientific_verdict=ScientificVerdict.ACCEPT,
+            actual_gpu_hours=0.9,
+            actual_cost_usd=0.45,
+            surprise="",
+            updated_belief="The objective appears better in this large-data regime.",
+            next_step="Consider scale promotion.",
+            evidence_refs=(),
+            revalidation_trigger="Reopen if the effect disappears at 25h.",
         )
