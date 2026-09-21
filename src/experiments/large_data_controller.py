@@ -411,6 +411,8 @@ def complete_scale_experiment(
     surprise: str,
     updated_belief: str,
     next_step: str,
+    evidence_refs: Tuple[str, ...],
+    revalidation_trigger: str = "",
     scale_action: ScaleAction = ScaleAction.STOP,
 ) -> ExperimentRecord:
     """Persist technical completion separately from the scientific verdict."""
@@ -440,6 +442,22 @@ def complete_scale_experiment(
     )
     if not isinstance(result, Mapping):
         raise TypeError("result mapping olmalıdır.")
+    _require_nonempty("updated_belief", updated_belief)
+    _require_nonempty("next_step", next_step)
+    if not evidence_refs:
+        raise ValueError("Scientific completion en az bir evidence ref gerektirir.")
+    if any(not str(ref).strip() for ref in evidence_refs):
+        raise ValueError("evidence_refs boş değer içeremez.")
+
+    scope = EvidenceScope(record.evidence_scope)
+    if (
+        scientific_verdict != ScientificVerdict.INCONCLUSIVE
+        and scope != EvidenceScope.MECHANISM_GENERAL
+        and not revalidation_trigger.strip()
+    ):
+        raise ValueError(
+            "Non-general ACCEPT/REJECT belief revalidation_trigger gerektirir."
+        )
 
     legacy_status = {
         ScientificVerdict.ACCEPT: "PASSED",
@@ -473,7 +491,11 @@ def complete_scale_experiment(
         technical_status="COMPLETED",
         scientific_verdict=scientific_verdict.value,
         pre_result_contract_sha256=record.pre_result_contract_sha256,
-        extra_fields=dict(record.extra_fields),
+        revalidation_trigger=revalidation_trigger.strip() or None,
+        extra_fields={
+            **dict(record.extra_fields),
+            "completion_evidence_refs": list(evidence_refs),
+        },
     )
     tracker.log(completed)
     return completed
