@@ -252,16 +252,17 @@ historical frozen evidence olarak korunur; yeni dataset geldiğinde önce
 - Büyük veri hazır mouth clips olduğu için ham video preprocessing pipeline'ı
   araştırma altyapısına ekleme. Darboğaz veri loading ise mevcut preprocessed
   artefakt erişimini iyileştir.
-- Tüm videoları RAM'e preload etme. Duration-aware batching için mevcut
-  `SequenceBucketSampler` kullan; worker/prefetch/pin-memory değerlerini hedef
-  eğitim makinesinde ölçerek ayarla.
+- Tüm videoları RAM'e preload etme. 10h/25h/50h/100h stage'i yalnız metadata'da
+  bırakma; planın exact sample ID listesini `StageDatasetView` ile gerçek train
+  dataset'ine bağla. Duration-aware batching için mevcut `SequenceBucketSampler`
+  kullan; worker/prefetch/pin-memory değerlerini hedef eğitim makinesinde ölçerek ayarla.
 - Uzun eğitim checkpointleri model ağırlığı yanında optimizer, scheduler, AMP
   scaler, epoch/global step, sampler epoch, RNG state ve provenance taşımalıdır.
   Her training epoch öncesi custom bucket sampler'ın `set_epoch` durumu açıkça
   ilerletilmelidir. Resume epoch-boundary sözleşmesidir; DataLoader worker
   augmentation stream'lerinin crash sonrası bit-bit replay edildiğini iddia etme.
   Resume sırasında dataset id/revision, split hash, train-stage sample hash,
-  candidate recipe hash, seed, initializer, code revision veya candidate version
+  candidate recipe hash, seed, initializer kimliği + SHA-256, code revision veya candidate version
   değişmişse fail-closed dur.
 - Large-data plan audit edilmeden `c0.5.0` yaşayan candidate'ını açma. Açıldıktan
   sonra c0.4.0 mimarisini başlangıç prior'ı olarak kullanabilirsin; ancak veri
