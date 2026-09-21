@@ -23,11 +23,29 @@ Görevin yalnızca mevcut modeli daha uzun eğitmek değildir. Büyük resmi kor
 
 Sabit bir yol haritasını körü körüne uygulama. Kanıtlar değiştikçe planı değiştir. Tek bir deneyin veya alt görevin tamamlanmasını ana hedefin tamamlanması olarak kabul etme.
 
-### Mevcut veri rejimi ve kanıt kapsamı
+### Kanıt rejimleri ve kapsam
 
-Mevcut korpus birkaç saatlik ve az konuşmacılı bir düşük-veri rejimidir. Bu veriyle yapılan deneyler; çalışan mekanizmaları, baskın hata türlerini ve daha büyük veri geldiğinde kullanılacak güçlü başlangıç reçetesini belirlemek içindir. Sonuçları bütün Türkçe konuşmacılara veya gelecekteki daha büyük veri rejimine otomatik olarak genelleme. Her kararda bulgunun mevcut veri rejimine özgü mü, daha genel bir mekanizma mı, yoksa yeni veri geldiğinde yeniden doğrulanması gereken geçici bir seçim mi olduğunu kaydet.
+`c0.4.0`'ı üreten korpus birkaç saatlik ve az konuşmacılı **frozen small-data
+evidence regime**'idir. D1–D23 ve bu rejimdeki probe'lar; çalışan mekanizmaları,
+baskın hata türlerini ve büyük-veri araştırması için güçlü başlangıç prior'larını
+belirler. Bunları bütün Türkçe konuşmacılara veya yeni HF snapshot'larına otomatik
+genelleme.
 
-Bu kapsam araştırma özgürlüğünü daraltmaz ve sabit deney sayısı koymaz. Literatürden, hata analizinden veya Türkçenin yapısından gelen yüksek bilgi değerli hipotezleri araştır; ancak yalnız küçük validation oynamaları sağlayan, temel inancı veya reçeteyi değiştirmeyen hiperparametre varyasyonlarını araştırma ilerlemesi olarak sayma. Veri sürümü veya konuşmacı çeşitliliği anlamlı biçimde değiştiğinde veri miktarına duyarlı kararları yeniden aç; altyapı, provenance ve doğrulanmış mekanizma bulgularını koru.
+Büyük-veri fazının veri kaynağı `avsr-tr-ekip/avsr-tr-dataset` üzerindeki preprocessed
+mouth clips'tir. Ancak belirli HF snapshot `src.data.prepare_large_data` ile immutable
+revision'a pinlenip identity-group split/stage planı audit edilmeden o snapshot aktif
+araştırma rejimi sayılmaz ve `c0.5.0` açılmaz.
+
+Her kararda bulgunun `mechanism_general`, `small_data_regime`,
+`large_data_regime`, `dataset_revision_specific` veya `scale_specific` olup
+olmadığını kaydet. Veri sürümü, konuşmacı/proxy çeşitliliği veya scale anlamlı biçimde
+değiştiğinde kapsamı dar olan kararları yeniden aç; altyapı/provenance kanıtlarını ve
+gerçekten doğrulanmış genel mekanizma bulgularını koru.
+
+Bu kapsam araştırma özgürlüğünü daraltmaz ve sabit deney sayısı koymaz. Literatürden,
+hata analizinden veya Türkçenin yapısından gelen yüksek bilgi değerli hipotezleri
+araştır; ancak yalnız küçük validation oynamaları sağlayan, temel inancı veya reçeteyi
+değiştirmeyen hiperparametre varyasyonlarını araştırma ilerlemesi olarak sayma.
 
 ## 1.1. Değişmez araştırma biçimi: tek yaşayan model
 
@@ -75,13 +93,30 @@ kanıt akışını sentezleyerek seç:
 Eski kanıtı dogma yapma. Yeni kanıt eski bir kararı çürütüyorsa kararı yeniden aç.
 Ancak eski kanıtı da silme; hangi veri rejiminde neden geçerli olduğunu koru.
 
-## 1.3. Temiz başlangıç kilidi
+## 1.3. Tarihsel bootstrap kilidi — yeniden uygulama
 
-Başlangıç candidate'ı `c0.0.0`, aktif soru `DATA-001` ve araştırma eğitimi yetkisi `false` değerindedir. `DATA-001` tamamlanmadan hiçbir model eğitimi yapılamaz.
+`c0.0.0 / DATA-001 / research_training_authorized=false` kuralı repository'nin ilk
+araştırma bootstrap'ına aittir ve **tamamlanmış tarihsel aşamadır**. Yeni `/goal`
+başlangıcında candidate'ı `c0.0.0`'a sıfırlama veya DATA-001'i yeniden açma.
 
-`run_experiment.py` içindeki `overfit`, `micro-pilot`, `local-train`, `modal-pilot`, `all` yolları ile `src/modal_runner/cloud_train.py` önceki aşamalı pipeline'ın emekliye ayrılmış girişleridir. Bunları kullanma, yeniden etkinleştirme veya etrafından dolaşma. Veri/evaluation temeli kabul edildikten ve tek başlangıç blueprint'i kanıtlarla yazıldıktan sonra, yalnız kanonik candidate sürümünü ve aktif araştırma sorusunu kabul eden yeni bir probe runner tasarla.
+Güncel otorite sırası:
+1. `research/RESEARCH_STATE.md`,
+2. `research/CANDIDATE.md`,
+3. `configs/research_candidate.yaml`,
+4. `research/NEXT_ACTION.md`,
+5. büyük-veri fazında ayrıca doğrulanmış `research/large_data_plan.json`.
 
-## 2. Büyük mimariyi koruma
+Şu anda `c0.4.0` frozen small-data evidence'dır. Gerçek large-data plan audit edilince
+yeni yaşayan candidate `c0.5.0 / RESEARCHING` olarak açılır. Yalnız kullanıcı açıkça
+"araştırmayı sıfırdan yeniden başlat" derse historical bootstrap kurallarına dön.
+
+`run_experiment.py` içindeki `overfit`, `micro-pilot`, `local-train`,
+`modal-pilot`, `all` yolları ile `src/modal_runner/cloud_train.py` önceki aşamalı
+pipeline'ın emekliye ayrılmış girişleridir. Bunları kullanma, yeniden etkinleştirme
+veya etrafından dolaşma. Güncel araştırma yalnız kanonik candidate, aktif research
+question ve bu protokolün governance katmanları üzerinden ilerler.
+
+## 2. Darboğazı sistem katmanında lokalize et
 
 Her zaman şu seviyeleri birbirinden ayır:
 
