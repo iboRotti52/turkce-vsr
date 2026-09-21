@@ -9,7 +9,7 @@ from src.data.large_data import (
     build_speaker_diverse_training_stages,
     validate_speaker_disjoint_split,
 )
-from src.data.large_data_loader import build_large_data_loader
+from src.data.large_data_loader import build_large_data_loader, set_large_data_loader_epoch
 from src.data.dataset import SequenceBucketSampler
 
 
@@ -86,6 +86,8 @@ def test_staged_subsets_are_nested_train_only_and_speaker_diverse():
             assert item_split[item_id] == "train"
 
     assert summary["1h"]["speakers"] >= 2
+    assert len(summary["1h"]["sample_ids_sha256"]) == 64
+    assert len(summary["full"]["sample_ids_sha256"]) == 64
 
 
 def test_large_data_plan_pins_revision_and_hashes_split():
@@ -125,6 +127,8 @@ def test_large_data_loader_uses_duration_buckets_and_rejects_ram_cache():
 
     loader = build_large_data_loader(Dataset(), train=True, num_workers=0)
     assert isinstance(loader.batch_sampler, SequenceBucketSampler)
+    set_large_data_loader_epoch(loader, 3)
+    assert loader.batch_sampler.epoch == 3
 
     val_loader = build_large_data_loader(
         Dataset(), train=False, num_workers=0, batch_size=3
