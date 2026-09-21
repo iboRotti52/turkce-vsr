@@ -14,7 +14,12 @@ import pathlib
 import sys
 
 from src.data.hf_downloader import DEFAULT_REPO_ID, HFDatasetDownloader
-from src.data.large_data import build_large_data_plan, write_large_data_plan
+from src.data.large_data import (
+    build_large_data_plan,
+    load_large_data_plan,
+    verify_large_data_split_file,
+    write_large_data_plan,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -84,7 +89,9 @@ def main(argv=None) -> int:
         encoding="utf-8",
     )
 
-    payload = plan.to_dict()
+    payload = load_large_data_plan(output)
+    verify_large_data_split_file(payload, split_output)
+
     print("=" * 72)
     print("LARGE-DATA RESEARCH PLAN (training başlamadı)")
     print("=" * 72)
