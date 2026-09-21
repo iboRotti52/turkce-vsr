@@ -76,10 +76,12 @@ Bunlar otomatik karar değil, **hipotez üretme sinyalleridir**:
 
 Her scale promotion şu bilgileri taşır:
 
-- source experiment id,
+- source experiment id ve `pre_result_contract_sha256`,
 - from_scale → to_scale,
+- HF dataset revision + split hash + source/target stage hash,
 - bilimsel verdict: `ACCEPT / REJECT / INCONCLUSIVE`,
-- deney başlamadan önce yazılmış promotion rule,
+- source deney başlamadan önce yazılmış promotion rule,
+- child run başlamadan önce yazılmış **child → next-scale promotion rule** (varsa),
 - rule karşılandı mı,
 - kullanılan evidence refs,
 - estimated/actual GPU-hours ve USD,
