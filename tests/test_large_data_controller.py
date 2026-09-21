@@ -236,7 +236,8 @@ def test_inconclusive_is_not_automatic_promotion(tmp_path):
                 "and sequence diversity; 10h confidence intervals overlap."
             ),
         ),
-        source_experiment=source,
+        tracker=tracker,
+        source_experiment_id=source.experiment_id,
         large_data_plan=_large_data_plan(),
         remaining_budget_usd=8.0,
     )
