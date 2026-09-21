@@ -42,8 +42,12 @@ EOF
 Zorunlu adımlar (atlama):
 1. Yeni veri için **identity-group-disjoint split'i sıfırdan kur** (`speaker_id`/`speaker` tercih edilir; yalnız `channel` varsa bunun proxy olduğunu audit et). `split_map_iborotti.json` yalnız eski 15 videoyu kapsar — yeni veriye taşıma.
 2. Yeni candidate sürümü aç (c0.5.0): eski `c0.4.0` reçeteyi başlangıç noktası al, veri/split hash'lerini, seed'i, initializer kökenini her checkpoint'e yaz (`GEMINI.md` §5D).
-3. Curriculum'u koru: `<=3.5s -> <=6s -> <=8s` (blank collapse kırıcı, D4/D6/D8).
-4. Decoder: Greedy `blank_penalty=1.2` + kalibre beam; KWS spotter `BP=1.2, conf=0.15` (D11/D14/D15).
+3. Curriculum `<=3.5s -> <=6s -> <=8s` değerini **c0.4 small-data prior'ı** olarak taşı
+   (D4/D6/D8); large-data scaling/failure evidence farklı bir curriculum, sampling veya
+   objective gerektirirse yeniden aç ve kontrollü probe et.
+4. Greedy `blank_penalty=1.2`, kalibre beam ve KWS `BP=1.2, conf=0.15` değerlerini
+   **başlangıç kalibrasyonu** olarak taşı (D11/D14/D15); yeni candidate'da immutable
+   mimari kuralı sayma. Decoder/KWS veya objective kanıtla yeniden değişebilir.
 5. Bilinen HF uyarısı: dataset viewer şu an `CastError` veriyor (kolon şema uyumsuzluğu) — `datasets` ile doğrudan parquet/JSON okuyarak doğrula.
 
 ## 3. Güvenlik ve repo düzeni
@@ -109,3 +113,38 @@ uyarlayarak üzerine yazma.
   değişmişse fail-closed dur; 10h checkpoint'ini 25h run gibi sürdürme.
 - Full training ancak yeni veri rejiminde readiness kapıları yeniden geçilip yeni
   candidate recipe dondurulduktan sonra başlatılabilir.
+
+
+## 5. Agentic large-data research
+
+Büyük veride araştırma motorunun amacı değişmez: bütün geçmiş kanıt, yeni failure cases,
+scaling behaviour, literatür ve komşu yöntemlerden yararlanarak **tek yaşayan canonical
+modeli mümkün olan en iyi hale getirmek**.
+
+**Large-data scaling policy constrains experiment cost, not scientific search space.**
+
+- `c0.4.0` başlangıç prior'ıdır; Conformer/CTC veya başka bir bileşen zorunlu değildir.
+- `c0.5.x/c0.6.x` architecture lineage değil, o anki en iyi bilimsel belief snapshot'ıdır.
+- Ajan frontend, temporal encoder, objective, tokenizer, optimizer, augmentation,
+  curriculum, decoder/KWS veya gerekirse tüm model ailesini kanıtla değiştirebilir.
+- Scale controller yalnız minimum sufficient scale, promotion rule, GPU-hours/USD ve
+  budget kararlarını yönetir.
+- Sonuçtan sonra promotion rule değiştirme.
+- `INCONCLUSIVE` tek başına daha fazla compute gerekçesi değildir.
+- Scaling curves `research/SCALING_ANALYSIS.md` içinde raw outputs ve subgroup
+  failures ile birlikte kalıcı kanıt olarak tutulur.
+- Large-data deneyini çalıştırmadan önce `register_scale_experiment(...)` ile
+  pre-result registry kaydı oluştur. Non-smoke run için code revision, candidate-recipe
+  hash, seed ve initializer ID+SHA-256 zorunludur; registration bunları promotion rule
+  ve exact data-stage provenance ile birlikte `pre_result_contract_sha256` altında
+  mühürler.
+- Koşu bitince `complete_scale_experiment(...)` ile technical completion, scientific
+  verdict, actual GPU-hours/USD ve scale action'ı ayrı kaydet; "çalıştı" ile "hipotez
+  kabul edildi"yi aynı şey sayma. Teknik hata `fail_scale_experiment(...)` ile
+  `ERROR` kapanır ve scientific verdict üretmez.
+- Scale büyütülecekse `register_promoted_experiment(...)` parent ve child kaydını
+  atomik yazar; başka dataset revision/split/stage'e promotion yapmaz, aynı parent'ı
+  iki kez promote etmez ve child'ın sonraki promotion rule'unu child sonucu görülmeden
+  ister.
+
+Programatik policy: `src/experiments/large_data_controller.py`.

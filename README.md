@@ -200,3 +200,17 @@ python -m src.data.prepare_large_data \
 
 Komut yalnız hafif manifest metadata'sını kullanır; full training veya ücretli GPU
 işi başlatmaz. Ayrıntılı kurallar `HANDOVER.md` içindedir.
+
+
+### Agentic research on large data
+
+Büyük veri fazında model araştırma zekâsı korunur; yalnız deney maliyeti/ölçeği için
+ayrı controller eklenir. Temel invariant:
+
+> **Large-data scaling policy constrains experiment cost, not scientific search space.**
+
+`c0.4.0` bir small-data prior'ıdır. Gelecek candidate'lar mevcut Conformer/CTC
+ailesine bağlı değildir; kanıt destekliyorsa modelin herhangi bir bileşeni veya tüm
+mimari değişebilir. `src/experiments/large_data_controller.py` minimum sufficient
+scale, predeclared promotion rules, GPU-hours/USD ve budget kontrolünü yönetir.
+Scaling behaviour `research/SCALING_ANALYSIS.md` içinde kalıcı kanıt olarak tutulur.

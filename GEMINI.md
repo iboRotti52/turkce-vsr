@@ -23,11 +23,29 @@ Görevin yalnızca mevcut modeli daha uzun eğitmek değildir. Büyük resmi kor
 
 Sabit bir yol haritasını körü körüne uygulama. Kanıtlar değiştikçe planı değiştir. Tek bir deneyin veya alt görevin tamamlanmasını ana hedefin tamamlanması olarak kabul etme.
 
-### Mevcut veri rejimi ve kanıt kapsamı
+### Kanıt rejimleri ve kapsam
 
-Mevcut korpus birkaç saatlik ve az konuşmacılı bir düşük-veri rejimidir. Bu veriyle yapılan deneyler; çalışan mekanizmaları, baskın hata türlerini ve daha büyük veri geldiğinde kullanılacak güçlü başlangıç reçetesini belirlemek içindir. Sonuçları bütün Türkçe konuşmacılara veya gelecekteki daha büyük veri rejimine otomatik olarak genelleme. Her kararda bulgunun mevcut veri rejimine özgü mü, daha genel bir mekanizma mı, yoksa yeni veri geldiğinde yeniden doğrulanması gereken geçici bir seçim mi olduğunu kaydet.
+`c0.4.0`'ı üreten korpus birkaç saatlik ve az konuşmacılı **frozen small-data
+evidence regime**'idir. D1–D23 ve bu rejimdeki probe'lar; çalışan mekanizmaları,
+baskın hata türlerini ve büyük-veri araştırması için güçlü başlangıç prior'larını
+belirler. Bunları bütün Türkçe konuşmacılara veya yeni HF snapshot'larına otomatik
+genelleme.
 
-Bu kapsam araştırma özgürlüğünü daraltmaz ve sabit deney sayısı koymaz. Literatürden, hata analizinden veya Türkçenin yapısından gelen yüksek bilgi değerli hipotezleri araştır; ancak yalnız küçük validation oynamaları sağlayan, temel inancı veya reçeteyi değiştirmeyen hiperparametre varyasyonlarını araştırma ilerlemesi olarak sayma. Veri sürümü veya konuşmacı çeşitliliği anlamlı biçimde değiştiğinde veri miktarına duyarlı kararları yeniden aç; altyapı, provenance ve doğrulanmış mekanizma bulgularını koru.
+Büyük-veri fazının veri kaynağı `avsr-tr-ekip/avsr-tr-dataset` üzerindeki preprocessed
+mouth clips'tir. Ancak belirli HF snapshot `src.data.prepare_large_data` ile immutable
+revision'a pinlenip identity-group split/stage planı audit edilmeden o snapshot aktif
+araştırma rejimi sayılmaz ve `c0.5.0` açılmaz.
+
+Her kararda bulgunun `mechanism_general`, `small_data_regime`,
+`large_data_regime`, `dataset_revision_specific` veya `scale_specific` olup
+olmadığını kaydet. Veri sürümü, konuşmacı/proxy çeşitliliği veya scale anlamlı biçimde
+değiştiğinde kapsamı dar olan kararları yeniden aç; altyapı/provenance kanıtlarını ve
+gerçekten doğrulanmış genel mekanizma bulgularını koru.
+
+Bu kapsam araştırma özgürlüğünü daraltmaz ve sabit deney sayısı koymaz. Literatürden,
+hata analizinden veya Türkçenin yapısından gelen yüksek bilgi değerli hipotezleri
+araştır; ancak yalnız küçük validation oynamaları sağlayan, temel inancı veya reçeteyi
+değiştirmeyen hiperparametre varyasyonlarını araştırma ilerlemesi olarak sayma.
 
 ## 1.1. Değişmez araştırma biçimi: tek yaşayan model
 
@@ -42,13 +60,63 @@ Bu projede birbirinden bağımsız çok sayıda pilot model üretme veya birkaç
 
 Araştırmanın çıktısı bir "pilot checkpoint" değil, mimarisi ve eğitim reçetesi kanıtlarla olgunlaştırılmış **full-train-ready model tanımıdır**. Full training araştırma yöntemi değil; bu tanım dondurulduktan sonra yapılan ayrı ve pahalı aşamadır.
 
-## 1.2. Temiz başlangıç kilidi
+## 1.2. Büyük veride değişmez bilimsel arama özgürlüğü
 
-Başlangıç candidate'ı `c0.0.0`, aktif soru `DATA-001` ve araştırma eğitimi yetkisi `false` değerindedir. `DATA-001` tamamlanmadan hiçbir model eğitimi yapılamaz.
+**Large-data scaling policy constrains experiment cost, not scientific search space.**
 
-`run_experiment.py` içindeki `overfit`, `micro-pilot`, `local-train`, `modal-pilot`, `all` yolları ile `src/modal_runner/cloud_train.py` önceki aşamalı pipeline'ın emekliye ayrılmış girişleridir. Bunları kullanma, yeniden etkinleştirme veya etrafından dolaşma. Veri/evaluation temeli kabul edildikten ve tek başlangıç blueprint'i kanıtlarla yazıldıktan sonra, yalnız kanonik candidate sürümünü ve aktif araştırma sorusunu kabul eden yeni bir probe runner tasarla.
+Büyük veri geldiğinde araştırma motorunu mevcut `c0.4.0` mimarisini koruyan bir optimizasyon
+ajanına dönüştürme. `c0.4.0` yalnız güçlü bir başlangıç prior'ıdır. `c0.5.x`,
+`c0.6.x` ve sonraki candidate sürümleri bir mimari ailesinin ardışık versiyonları
+değil, sistemin o anda **tüm kanıtlar ışığında en iyi bilimsel inancının snapshot'larıdır**.
 
-## 2. Büyük mimariyi koruma
+Bu nedenle yeni kanıt destekliyorsa kanonik modelin herhangi bir parçası yeniden açılabilir
+ve değiştirilebilir: preprocessing varsayımları, visual frontend, temporal architecture,
+objective/loss, tokenizer/output representation, initializer/pretraining, optimizer,
+scheduler, augmentation, curriculum/sampling, decoder, language-model integration ve KWS.
+Gerekirse tüm model ailesi değişebilir.
+
+Tek yaşayan model prensibi bunu engellemez. Bu prensip yalnız paralel unutulmuş model
+dallarını engeller; **bilimsel arama alanını daraltmaz**.
+
+Her yeni araştırma sorusunu yalnız son başarılı deneye bakarak değil, mümkün olan bütün
+kanıt akışını sentezleyerek seç:
+
+- önceki D kararları ve bunların scope'u,
+- başarısız ve inconclusive deneyler,
+- raw predictions ve gerçek failure cases,
+- failure cluster'ların zaman içindeki değişimi,
+- 10h/25h/50h/100h scaling behaviour,
+- speaker/proxy, duration ve source/channel alt-grup davranışı,
+- primary literature ve official implementations,
+- VSR dışındaki ilgili komşu alanlar.
+
+Eski kanıtı dogma yapma. Yeni kanıt eski bir kararı çürütüyorsa kararı yeniden aç.
+Ancak eski kanıtı da silme; hangi veri rejiminde neden geçerli olduğunu koru.
+
+## 1.3. Tarihsel bootstrap kilidi — yeniden uygulama
+
+`c0.0.0 / DATA-001 / research_training_authorized=false` kuralı repository'nin ilk
+araştırma bootstrap'ına aittir ve **tamamlanmış tarihsel aşamadır**. Yeni `/goal`
+başlangıcında candidate'ı `c0.0.0`'a sıfırlama veya DATA-001'i yeniden açma.
+
+Güncel otorite sırası:
+1. `research/RESEARCH_STATE.md`,
+2. `research/CANDIDATE.md`,
+3. `configs/research_candidate.yaml`,
+4. `research/NEXT_ACTION.md`,
+5. büyük-veri fazında ayrıca doğrulanmış `research/large_data_plan.json`.
+
+Şu anda `c0.4.0` frozen small-data evidence'dır. Gerçek large-data plan audit edilince
+yeni yaşayan candidate `c0.5.0 / RESEARCHING` olarak açılır. Yalnız kullanıcı açıkça
+"araştırmayı sıfırdan yeniden başlat" derse historical bootstrap kurallarına dön.
+
+`run_experiment.py` içindeki `overfit`, `micro-pilot`, `local-train`,
+`modal-pilot`, `all` yolları ile `src/modal_runner/cloud_train.py` önceki aşamalı
+pipeline'ın emekliye ayrılmış girişleridir. Bunları kullanma, yeniden etkinleştirme
+veya etrafından dolaşma. Güncel araştırma yalnız kanonik candidate, aktif research
+question ve bu protokolün governance katmanları üzerinden ilerler.
+
+## 2. Darboğazı sistem katmanında lokalize et
 
 Her zaman şu seviyeleri birbirinden ayır:
 
@@ -98,7 +166,8 @@ Araştırma durumunu yalnızca konuşma bağlamında tutma. Repository'de aşağ
 - `research/DECISIONS.md`: önemli kararlar, kanıtları ve kararı değiştirecek sonuçlar.
 - `research/FAILURE_ANALYSIS.md`: gerçek tahminler, hata örnekleri ve hata kümeleri.
 - `research/SOURCES.md`: incelenen birincil kaynaklar ve destekledikleri iddialar.
-- `experiments/registry.jsonl`: tüm deneylerin yapılandırılmış kayıtları.
+- `research/SCALING_ANALYSIS.md`: büyük-veri ölçek davranışı, subgroup trendleri, promotion geçmişi ve scale-sensitive bulgular.
+- `experiments/registry.jsonl`: tüm deneylerin yapılandırılmış kayıtları; large-data deneylerinde candidate, data scale, evidence scope, promotion rule, estimated/actual GPU-hours ve maliyet de tutulur.
 - `research/NEXT_ACTION.md`: çalışma kesilirse uygulanacak tek ve kesin sonraki adım.
 - `configs/research_candidate.yaml`: kanonik modelin makine tarafından okunabilir, sürümlü reçetesi.
 
@@ -151,7 +220,9 @@ Her döngüde kanonik modeldeki **tek bir aktif, en yüksek bilgi değerli soruy
 - Başarısız olursa öğrenilecek şey.
 - Başarılı olursa sonraki doğrulama adımı.
 
-Hipotezleri `beklenen bilgi kazancı × potansiyel etki / maliyet ve risk` ilkesine göre sırala. En pahalı, en yeni veya en popüler yöntemi otomatik seçme.
+Hipotezleri `beklenen bilgi kazancı × potansiyel etki / maliyet ve risk` ilkesine göre sırala. Bu bir kavramsal önceliklendirme ilkesidir; sahte sayısal "information gain score" uydurma. En pahalı, en yeni veya en popüler yöntemi otomatik seçme.
+
+Büyük veri fazında aynı bilimsel soruyu ayrıca **minimum sufficient scale** açısından değerlendir. Ama scale controller'ın görevi "hangi mimariye bakılabileceğini" seçmek değil, seçilen bilimsel hipotezi güvenilir biçimde ayırt etmek için gereken en küçük veri/compute ölçeğini belirlemektir.
 
 ### D. En ucuz ayırt edici probe'u çalıştır
 
@@ -198,7 +269,14 @@ Her deneyden sonra açıkça kaydet:
 
 Başarısız deneyleri silme veya gizleme. Yalnız başarılı sonuçları seçerek geçmiş planı haklı çıkarmaya çalışma. Kalıcı araştırma dosyalarını güncelle ve bir sonraki döngüye geç.
 
-Probe bittikten sonra kararı açıkça `ACCEPT`, `REJECT` veya `INCONCLUSIVE` olarak kaydet. `ACCEPT` yalnız önceden yazılmış karar kuralı karşılandıysa kanonik modeli değiştirir. `INCONCLUSIVE` sonuç ölçek büyütme gerekçesi değildir; daha ayırt edici en ucuz kontrolü gerektirir.
+Probe bittikten sonra bilimsel kararı açıkça `ACCEPT`, `REJECT` veya `INCONCLUSIVE` olarak kaydet. `ACCEPT` yalnız önceden yazılmış karar kuralı karşılandıysa kanonik modeli değiştirir.
+
+Scale kararı bilimsel verdict'ten ayrıdır. `PROMOTE_SCALE` ayrı bir controller action'ıdır.
+`INCONCLUSIVE` **tek başına** daha fazla veri/GPU harcama gerekçesi değildir. Ancak kanıt,
+belirsizliğin gerçekten scale-sensitive olduğunu gösteriyor ve daha büyük scale'in bunu
+neden ayıracağı önceden açıklanabiliyorsa, predeclared promotion rule ve bütçe kontrolüyle
+bir üst scale'e geçilebilir. `REJECT` edilen aynı hipotezi sırf daha çok compute harcayarak
+yeniden canlandırma; yeni mekanizma varsa yeni araştırma sorusu aç.
 
 ## 5.1. Araştırma ölçekleri ve full-training kapısı
 
@@ -269,6 +347,84 @@ historical frozen evidence olarak korunur; yeni dataset geldiğinde önce
   miktarına/konuşmacı çeşitliliğine duyarlı training kararlarını otomatik doğru
   kabul etme ve gerektiğinde yeniden probe et.
 
+## 5.3. Large-data experiment controller
+
+Bu katman araştırma motorunun üstünde bir **harcama/ölçek governance katmanıdır**.
+Ne araştırılacağını belirlemez ve mevcut mimariyi korumaz.
+
+Her large-data deneyi başlamadan önce registry'de en az şunları kaydet:
+
+- `candidate_version` ve tek aktif `question_id`,
+- hipotez, expectation ve falsification criteria,
+- `data_scale` ve `minimum_sufficient_scale`,
+- neden daha küçük scale'in yetersiz olduğu (smoke/en küçük stage atlanıyorsa),
+- `information_gain_rationale`,
+- **sonuç görülmeden yazılmış promotion rule**,
+- estimated GPU-hours ve estimated USD,
+- planın exact sample-stage hash'i,
+- `code_revision`, `candidate_recipe_sha256`, seed ve initializer ID + SHA-256.
+
+Registration bu alanlardan `pre_result_contract_sha256` üretir. Sonuç görülmeden
+sabitlenmesi gereken metadata elle değişirse completion/promotion fail-closed durur.
+
+Scale sırası gerçek `large_data_plan.json` içindeki mevcut aşamalardan türetilir:
+`smoke → 10h → 25h → 50h → 100h → full-data` benzeri. Dataset hedeflerden birine
+yetmiyorsa olmayan stage'i icat etme.
+
+Promotion kuralları:
+
+1. İlk koşu, hipotezi güvenilir biçimde ayırt edebilen **minimum sufficient scale**'de yapılır.
+2. Daha küçük scale atlanıyorsa bilimsel neden yazılır; sırf hız için atlama yapılmaz.
+3. Promotion rule sonuç görülmeden registry'ye yazılmış olmalıdır; sonradan kolaylaştırılamaz.
+4. `ACCEPT` sonucu yalnız rule karşılandıysa daha büyük scale'e taşınabilir.
+5. `INCONCLUSIVE` otomatik promotion değildir; belirsizlik scale-sensitive ise ve daha büyük
+   scale'in neden ayıracağı açıklanabiliyorsa promotion yapılabilir.
+6. `REJECT` edilen aynı hipotez daha pahalı scale'e promote edilmez.
+7. Ara stage atlanıyorsa ayrıca gerekçe gerekir.
+8. Promotion kaynağı aynı HF dataset revision, split map ve source-stage sample hash'ine
+   ait olmalıdır; başka snapshot'a sessiz promotion yapılamaz.
+9. Aynı source experiment yalnız bir kez promote edilebilir. Parent→child registry
+   güncellemesi atomik yapılır.
+10. Child scale run başlamadan **onun bir sonraki scale'e geçiş rule'u** da yazılır;
+    sonuç görüldükten sonra rule üretilemez. Son mevcut scale için bu gerekmez.
+11. Promotion öncesi kalan bütçe, estimated GPU-hours ve estimated USD kontrol edilir.
+12. Deney bitince actual GPU-hours ve actual USD kaydedilir. Teknik job hata verirse
+    `technical_status=ERROR` ile kapat; bilimsel verdict uydurma.
+13. Full-data **research run** ile `FULL_TRAINING` durumunu karıştırma. Araştırma sırasında
+    full-data stage yalnız bilimsel soru bunu gerçekten gerektiriyorsa kullanılabilir;
+    production/final full training yine readiness kapısına tabidir.
+
+Programatik doğrulama için `src.experiments.large_data_controller` kullan.
+
+### Scaling behaviour resmi kanıt kaynağıdır
+
+Büyük veri yalnız daha yüksek nihai skor üretmek için kullanılmaz; model hakkında yeni bilgi
+üretir. Aynı question/candidate/metric için scale curve oluştur ve
+`research/SCALING_ANALYSIS.md` dosyasını güncelle.
+
+Özellikle şunları izle:
+
+- veri arttıkça WER/CER düşüşünün devam edip etmediği,
+- train–validation gap ve saturation,
+- kısa/uzun utterance bucket'larının farklı davranışı,
+- speaker/proxy ve source/channel subgroup'ları,
+- blank-collapse veya alignment dinamiklerinin scale ile geri dönüp dönmediği,
+- iki yöntemin hangi scale'de ayrışmaya başladığı,
+- compute/maliyet karşılığında bilgi kazancı.
+
+Scaling curve tek başına nedensellik değildir. Raw predictions, subgroup failure analysis,
+ablation ve literatürle birlikte yorumla.
+
+### Evidence scope ve yeniden doğrulama
+
+Yeni önemli bulguyu şu scope'lardan biriyle kaydet:
+`mechanism_general`, `small_data_regime`, `large_data_regime`,
+`dataset_revision_specific`, `scale_specific`.
+
+`mechanism_general` dışındaki bulgular için revalidation trigger yaz. Böylece D1–D23
+gibi small-data kanıtları korunur ama yeni veri rejimini kilitlemez; large-data bulguları
+da gelecekte evrensel gerçekmiş gibi taşınmaz.
+
 ## 6. Otonomi sınırları
 
 Rutin teknik kararlar için kullanıcıya soru sorma. Kanıta dayalı, güvenli ve geri alınabilir seçimi yap; gerekçesini kaydet ve devam et.
@@ -289,6 +445,8 @@ Kullanıcı ayrıca değiştirmedikçe toplam ücretli bulut hesaplama bütçesi
 
 - Harcamayı deney bazında kaydet.
 - Tahminî ve gerçekleşen maliyeti ayrı yaz.
+- Large-data deneylerinde estimated/actual GPU-hours değerlerini de registry'ye yaz.
+- Daha büyük scale'e geçmeden önce controller ile kalan bütçeyi tekrar doğrula.
 - Tek bir deney toplam bütçenin yüzde 25'inden fazlasını kullanacaksa önce daha küçük ve ayırt edici bir probe koş.
 - Önceden harcanmış tutarı toplam bütçeden düş.
 - Bütçe ölçülemiyorsa pahalı deney başlatmadan önce durumu netleştir.
@@ -329,4 +487,4 @@ Görevin etkileyici görünen deneyler üretmek değil; gerçek veriden öğrene
 
 Bu dosya yüklendikten sonra kullanıcı aşağıdaki hedefi veya aynı anlamı taşıyan kısa bir hedefi verebilir:
 
-> Bu repository için `GEMINI.md` içinde tanımlanan otonom Türkçe VSR araştırma protokolünü uygula. Önce repository, `research/CANDIDATE.md`, `configs/research_candidate.yaml`, aktif işler, checkpoint'ler, güvenilir metrikler, veri split'leri ve kalan bütçeyi uzlaştır. Mevcut birkaç saatlik ve az konuşmacılı veri rejiminin sınırlarını her iddiada açıkça koru. Her anda tek kanonik araştırma modelini sürdür; kısa koşuları ayrı pilot modeller değil, bu modeldeki tek bir belirsizliği çözen geçici probe'lar olarak kullan. Modelin her bileşeni için mevcut stack ile sınırlanmadan VSR, video, ASR, self-supervised learning ve komşu alanlardaki birincil kaynakları araştır. Tek aktif yüksek bilgi değerli soruyu seç; en ucuz ayırt edici probe'u tasarla, çalıştır, sonuçlanana kadar takip et, ham çıktıları ve hata kümelerini incele, `ACCEPT/REJECT/INCONCLUSIVE` kararı ver ve yalnız kanıtlanan değişikliği kanonik modele işle. Küçük validation oynamaları için amaçsız hiperparametre varyasyonlarına sapma. Yüksek etkili belirsizlikler kapanıp confirmation ve dress rehearsal tamamlanarak full-training readiness koşullarının tamamı kanıtlanınca reçeteyi dondur. Kullanıcının güncel talimatı gereği full training'i başlatmadan dur ve raporla. Tek bir deney, alt görev, teknik başarı veya oturum sonunu hedefin tamamlanması sayma. Bütçe ya da protokoldeki gerçek durma koşullarından biri oluşana kadar otonom araştırma döngüsünü sürdür ve her aşamada kalıcı araştırma belleğini güncelle.
+> Bu repository için `GEMINI.md` içinde tanımlanan otonom Türkçe VSR araştırma protokolünü uygula. Önce repository, `research/CANDIDATE.md`, `configs/research_candidate.yaml`, aktif işler, checkpoint'ler, güvenilir metrikler, veri split'leri ve kalan bütçeyi uzlaştır. Mevcut birkaç saatlik ve az konuşmacılı veri rejiminin sınırlarını her iddiada açıkça koru. Her anda tek kanonik araştırma modelini sürdür; kısa koşuları ayrı pilot modeller değil, bu modeldeki tek bir belirsizliği çözen geçici probe'lar olarak kullan. Modelin her bileşeni için mevcut stack ile sınırlanmadan VSR, video, ASR, self-supervised learning ve komşu alanlardaki birincil kaynakları araştır. Tek aktif yüksek bilgi değerli soruyu seç; bilimsel arama alanını mevcut mimariyle sınırlama. En ucuz ayırt edici probe'u ve büyük-veride minimum sufficient scale'i seç, çalıştır, sonuçlanana kadar takip et, ham çıktıları, subgroup hata kümelerini ve scaling behaviour'ı incele, `ACCEPT/REJECT/INCONCLUSIVE` bilimsel kararını scale action'dan ayır ve yalnız kanıtlanan değişikliği kanonik modele işle. Large-data scaling policy yalnız maliyet/ölçek yönetir, scientific search space'i daraltmaz. Küçük validation oynamaları için amaçsız hiperparametre varyasyonlarına sapma. Yüksek etkili belirsizlikler kapanıp confirmation ve dress rehearsal tamamlanarak full-training readiness koşullarının tamamı kanıtlanınca reçeteyi dondur. Kullanıcının güncel talimatı gereği full training'i başlatmadan dur ve raporla. Tek bir deney, alt görev, teknik başarı veya oturum sonunu hedefin tamamlanması sayma. Bütçe ya da protokoldeki gerçek durma koşullarından biri oluşana kadar otonom araştırma döngüsünü sürdür ve her aşamada kalıcı araştırma belleğini güncelle.
