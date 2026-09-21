@@ -20,6 +20,8 @@ jobs:
           cache: pip
       - name: Install CPU-only torch first (keeps CI fast; CUDA wheels are GBs)
         run: pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision torchaudio
+      - name: Install ffmpeg (video decode fallback; PyAV is not a project dep)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
       - name: Install project deps + pytest
         run: pip install -r requirements.txt pytest
       - name: Run full test suite (unit + research-governance/guardrail/preflight)
