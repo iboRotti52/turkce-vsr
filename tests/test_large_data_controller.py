@@ -777,6 +777,8 @@ def test_pre_result_contract_detects_manual_registry_tampering(tmp_path):
             surprise="",
             updated_belief="Would otherwise look promising.",
             next_step="Should never be accepted after tampering.",
+            evidence_refs=("artifacts/probe_arch_ld303/metrics.json",),
+            revalidation_trigger="Reopen on a new dataset revision.",
         )
 
 
