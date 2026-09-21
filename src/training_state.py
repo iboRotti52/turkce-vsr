@@ -56,6 +56,7 @@ def build_training_checkpoint(
         "candidate_version",
         "seed",
         "initializer_id",
+        "initializer_sha256",
     )
     missing = [key for key in required if not provenance.get(key)]
     if missing:
