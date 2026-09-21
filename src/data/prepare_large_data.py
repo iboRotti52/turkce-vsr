@@ -35,8 +35,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--work-dir",
-        default="data/large_data",
-        help="Temporary/lightweight manifest cache; full clips are NOT downloaded.",
+        default=".cache/large_data",
+        help="Ignored lightweight manifest cache; full clips are NOT downloaded.",
     )
     parser.add_argument(
         "--output",
