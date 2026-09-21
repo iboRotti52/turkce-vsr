@@ -34,3 +34,22 @@ kararıyla yapılır.
 
 
 
+
+
+## Large-data fazına geçişte sonraki gerçek adım
+
+`c0.4.0` historical small-data sonucu değişmeden kalır. Yeni veri gerçekten
+50–100 saat ölçeğine ulaştığında ilk adım eğitim başlatmak değil, HF snapshot'ını
+immutable revision ile sabitleyip yeni speaker-disjoint planı üretmektir:
+
+```bash
+.venv/bin/python -m src.data.prepare_large_data \
+  --repo-id avsr-tr-ekip/avsr-tr-dataset \
+  --revision <40-hex-HF-dataset-commit-sha>
+```
+
+Çıktıdaki speaker/süre dağılımını ve leakage kontrollerini incele. Plan kabul edilince
+yeni yaşayan candidate `c0.5.0 / RESEARCHING` aç; `c0.4.0` mimari/reçetesini
+başlangıç prior'ı olarak taşı ancak veri-miktarına duyarlı kararları yeniden aç.
+İlk probe'u mümkün olan en küçük speaker-diverse stage'de yap. Test splitini candidate
+dondurulana kadar araştırma kararlarına açma.
