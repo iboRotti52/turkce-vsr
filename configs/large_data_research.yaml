@@ -110,6 +110,11 @@ agentic_experiment_controller:
     choose_minimum_sufficient_scale: true
     skipping_smaller_scale_requires_reason: true
     non_smoke_run_requires_predeclared_promotion_rule: true
+  outcomes:
+    technical_status_separate_from_scientific_verdict: true
+    technical_terminal_state: COMPLETED
+    scientific_verdicts: [ACCEPT, REJECT, INCONCLUSIVE]
+    scale_actions: [STOP, RETEST_SAME_SCALE, PROMOTE_SCALE]
   promotion:
     rule_must_be_recorded_before_result: true
     accept_requires_rule_met: true
