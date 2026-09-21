@@ -532,3 +532,21 @@
 
 
 
+
+
+## Large-data karar kayıt sözleşmesi
+
+D1–D23 tarihsel kararları değişmeden kalır. Large-data fazında eklenecek her önemli
+yeni karar, normal kanıt/gerekçe alanlarına ek olarak şunları açıkça taşır:
+
+- `evidence_scope`: `mechanism_general | small_data_regime | large_data_regime |
+  dataset_revision_specific | scale_specific`
+- `revalidation_trigger`: bu kararın hangi yeni veri/ölçek/başarısızlıkta yeniden
+  açılacağı
+- kullanılan scale(ler) ve experiment ID'leri
+- raw/failure-analysis evidence ref'leri
+- scaling curve varsa `research/SCALING_ANALYSIS.md` referansı
+
+Bir small-data kararı sırf geçmişte ACCEPT edildi diye large-data'da değişmez kural
+olmaz. Aynı şekilde tek bir large-data snapshot sonucu da otomatik global mekanizma
+olarak sınıflandırılmaz.
