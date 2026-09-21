@@ -183,7 +183,7 @@ Yeni faz ham videoyu yeniden preprocess etmez; kaynak
 araştırması için repo artık:
 
 - immutable Hugging Face dataset revision pinning,
-- deterministic speaker-disjoint train/val/test planı,
+- deterministic speaker/group-disjoint train/val/test planı (`channel` kullanılıyorsa proxy olarak açıkça işaretlenir),
 - nested speaker-diverse 10h/25h/50h/100h train stages,
 - mevcut `SequenceBucketSampler` ile duration-aware batching,
 - optimizer/scheduler/scaler/RNG/provenance içeren resumable checkpoint state
