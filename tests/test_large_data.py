@@ -131,3 +131,84 @@ def test_large_data_loader_uses_duration_buckets_and_rejects_ram_cache():
 
     with pytest.raises(ValueError, match="RAM cache"):
         build_large_data_loader(Dataset(cache=True), train=True, num_workers=0)
+
+
+def test_duration_balancing_does_not_put_dominant_speaker_in_test():
+    rows = []
+    speaker_hours = {
+        "dominant": 60.0,
+        "speaker-b": 10.0,
+        "speaker-c": 10.0,
+        "speaker-d": 10.0,
+        "speaker-e": 10.0,
+    }
+    for idx, (speaker, hours) in enumerate(speaker_hours.items()):
+        rows.append(
+            {
+                "item_id": f"video-{idx}",
+                "segment_id": "000000",
+                "duration": str(hours * 3600.0),
+                "channel": speaker,
+                "text": "örnek türkçe cümle",
+            }
+        )
+
+    split_map = build_speaker_disjoint_split(
+        rows, seed=42, val_fraction=0.10, test_fraction=0.10
+    )
+    validate_speaker_disjoint_split(split_map)
+
+    assert split_map["video-0"]["split"] == "train"
+    summary = {
+        split: sum(
+            float(row["duration"])
+            for row in rows
+            if split_map[row["item_id"]]["split"] == split
+        )
+        / 3600.0
+        for split in ("train", "val", "test")
+    }
+    assert summary["train"] == pytest.approx(80.0)
+    assert summary["val"] == pytest.approx(10.0)
+    assert summary["test"] == pytest.approx(10.0)
+
+
+def test_pinned_dataset_requires_explicit_new_split_map(tmp_path):
+    pinned = "a" * 40
+    downloader = HFDatasetDownloader(
+        target_dir=tmp_path,
+        revision=pinned,
+        require_pinned_revision=True,
+    )
+    assert downloader.manifest_dir == tmp_path / "_revisions" / pinned / "manifests"
+
+    with pytest.raises(FileNotFoundError, match="split map açıkça verilmelidir"):
+        downloader._get_split_map()
+
+    split_path = tmp_path / "split_map_large_data.json"
+    split_path.write_text(
+        json.dumps({"video-a": {"split": "train", "speaker": "speaker-a"}}),
+        encoding="utf-8",
+    )
+    explicit = HFDatasetDownloader(
+        target_dir=tmp_path,
+        revision=pinned,
+        require_pinned_revision=True,
+        split_map_path=split_path,
+    )
+    assert explicit._get_split_map()["video-a"]["split"] == "train"
+
+
+def test_pinned_revisions_use_separate_local_caches(tmp_path):
+    first = HFDatasetDownloader(
+        target_dir=tmp_path,
+        revision="a" * 40,
+        require_pinned_revision=True,
+    )
+    second = HFDatasetDownloader(
+        target_dir=tmp_path,
+        revision="b" * 40,
+        require_pinned_revision=True,
+    )
+    assert first.manifest_dir != second.manifest_dir
+    assert first.clips_dir != second.clips_dir
