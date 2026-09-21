@@ -306,6 +306,7 @@ def build_speaker_diverse_training_stages(
                 "clips": len(cumulative_ids),
                 "hours": round(cumulative_seconds / 3600.0, 4),
                 "speakers": len(cumulative_speakers),
+                "sample_ids_sha256": _canonical_sha256(cumulative_ids),
             }
             current_target = next(target_iter, None)
 
@@ -316,6 +317,7 @@ def build_speaker_diverse_training_stages(
         "clips": len(cumulative_ids),
         "hours": round(cumulative_seconds / 3600.0, 4),
         "speakers": len(cumulative_speakers),
+        "sample_ids_sha256": _canonical_sha256(cumulative_ids),
     }
     return stages, summaries
 
