@@ -42,9 +42,12 @@ loader:
   worker_policy: tune_on_training_host
   persistent_workers_when_workers_gt_zero: true
   pin_memory_on_cuda: true
+  call_sampler_set_epoch_each_epoch: true
 
 checkpointing:
   resumable: true
+  resume_granularity: epoch_boundary
+  exact_worker_augmentation_replay_after_crash: false
   required_state:
     - model_state_dict
     - optimizer_state_dict
@@ -59,8 +62,12 @@ checkpointing:
     - dataset_id
     - dataset_revision
     - split_map_sha256
+    - train_subset_sha256
+    - candidate_recipe_sha256
     - code_revision
     - candidate_version
+    - seed
+    - initializer_id
 
 research:
   starting_prior: c0.4.0
