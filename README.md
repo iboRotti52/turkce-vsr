@@ -139,7 +139,7 @@ python scripts/build_dataset_manifest.py
 ### 3. Birim Testlerini Çalıştırma
 
 ```bash
-.venv/bin/python -m pytest -q   # beklenen: 105 passed, 8 skipped (skip'ler: local veri yokluğu)
+.venv/bin/python -m pytest -q   # CI'da suite geçmeli; local-veriye bağlı testler skip olabilir
 ```
 
 ### 4. Full-Training Preflight (ücretli işlem başlatmaz)
