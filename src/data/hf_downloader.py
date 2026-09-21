@@ -40,8 +40,19 @@ class HFDatasetDownloader:
         split_map_path: Optional[Union[str, pathlib.Path]] = None,
         hf_token: Optional[str] = None,
         max_local_gb: float = DEFAULT_MAX_LOCAL_GB,
+        revision: Optional[str] = None,
+        require_pinned_revision: bool = False,
     ):
         self.repo_id = repo_id
+        self.revision = revision
+        if require_pinned_revision:
+            normalized = (revision or "").strip().lower()
+            if len(normalized) != 40 or any(ch not in "0123456789abcdef" for ch in normalized):
+                raise ValueError(
+                    "Large-data araştırması immutable 40-hex Hugging Face commit revision gerektirir; "
+                    f"verilen revision={revision!r}"
+                )
+            self.revision = normalized
         self.target_dir = pathlib.Path(target_dir) if target_dir else DEFAULT_TARGET_DIR
         self.split_map_path = pathlib.Path(split_map_path) if split_map_path else DEFAULT_SPLIT_MAP
         self.hf_token = hf_token or os.environ.get("HF_TOKEN") or None
@@ -90,6 +101,7 @@ class HFDatasetDownloader:
                         filename=hf_path,
                         repo_type="dataset",
                         token=self.hf_token,
+                        revision=self.revision,
                     )
                     import shutil
                     shutil.copyfile(downloaded, dest_file)
@@ -97,7 +109,8 @@ class HFDatasetDownloader:
         except Exception as e:
             # 2. Yedek Yöntem: Doğrudan raw HTTP
             print(f"huggingface_hub indirme uyarısı, raw HTTP deneniyor: {e}", file=sys.stderr)
-            base_raw = f"https://huggingface.co/datasets/{self.repo_id}/raw/main/data/iborotti/manifests"
+            revision = self.revision or "main"
+            base_raw = f"https://huggingface.co/datasets/{self.repo_id}/resolve/{revision}/data/iborotti/manifests"
             for fname in ["accepted.csv", "all.csv"]:
                 dest_file = self.manifest_dir / fname
                 if not dest_file.exists() or dest_file.stat().st_size == 0:
@@ -181,13 +194,15 @@ class HFDatasetDownloader:
                         filename=hf_rel,
                         repo_type="dataset",
                         token=self.hf_token,
+                        revision=self.revision,
                     )
                     import shutil
                     shutil.copyfile(cached_p, target_f)
                 except Exception as ex:
                     # Alternatif raw indirme
                     try:
-                        raw_url = f"https://huggingface.co/datasets/{self.repo_id}/resolve/main/{hf_rel}"
+                        revision = self.revision or "main"
+                        raw_url = f"https://huggingface.co/datasets/{self.repo_id}/resolve/{revision}/{hf_rel}"
                         req = urllib.request.Request(raw_url, headers={"User-Agent": "AVSR-TR-Client"})
                         with urllib.request.urlopen(req) as resp, open(target_f, "wb") as out:
                             out.write(resp.read())
@@ -208,7 +223,7 @@ class HFDatasetDownloader:
         try:
             from huggingface_hub import HfApi
             api = HfApi(token=self.hf_token)
-            info = api.dataset_info(self.repo_id, files_metadata=True)
+            info = api.dataset_info(self.repo_id, revision=self.revision, files_metadata=True)
             total_bytes = sum(f.size for f in info.siblings if f.size is not None)
             return total_bytes / (1024 ** 3)
         except Exception as e:
@@ -234,7 +249,10 @@ class HFDatasetDownloader:
                 )
 
         from huggingface_hub import snapshot_download
-        print(f"🚀 [HF FULL SYNC] '{self.repo_id}' deposu '{self.target_dir}' dizinine indiriliyor...")
+        print(
+            f"🚀 [HF FULL SYNC] '{self.repo_id}' revision={self.revision or 'main'} "
+            f"deposu '{self.target_dir}' dizinine indiriliyor..."
+        )
 
         patterns = allow_patterns or ["data/iborotti/*"]
 
@@ -246,6 +264,7 @@ class HFDatasetDownloader:
                 repo_type="dataset",
                 allow_patterns=patterns,
                 token=self.hf_token,
+                revision=self.revision,
                 local_dir=str(root_dir),
             )
         else:
@@ -254,6 +273,7 @@ class HFDatasetDownloader:
                 repo_type="dataset",
                 allow_patterns=patterns,
                 token=self.hf_token,
+                revision=self.revision,
             )
             import shutil
             src_inner = pathlib.Path(cache_dir) / "data" / "iborotti"
