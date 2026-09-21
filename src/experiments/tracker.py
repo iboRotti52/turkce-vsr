@@ -75,9 +75,29 @@ class ExperimentTracker:
         self.registry_path.parent.mkdir(parents=True, exist_ok=True)
 
     def log(self, record: ExperimentRecord) -> None:
-        """Deney kaydını registry.jsonl dosyasına güvenli ekler veya günceller."""
-        lines = []
-        updated = False
+        """Atomically append or update one experiment record."""
+        self.log_many([record])
+
+    def log_many(self, records: List[ExperimentRecord]) -> None:
+        """Atomically update multiple records in one registry replacement.
+
+        This is used by scale promotion so the parent PROMOTE_SCALE state and the
+        child IN_PROGRESS record cannot be split by a process interruption.
+        """
+        if not records:
+            return
+        by_id: Dict[str, ExperimentRecord] = {}
+        for record in records:
+            if not record.experiment_id:
+                raise ValueError("experiment_id boş olamaz.")
+            if record.experiment_id in by_id:
+                raise ValueError(
+                    f"Aynı atomic batch içinde duplicate experiment_id: {record.experiment_id}"
+                )
+            by_id[record.experiment_id] = record
+
+        lines: List[str] = []
+        emitted: set[str] = set()
         if self.registry_path.exists():
             with open(self.registry_path, "r", encoding="utf-8") as f:
                 for line in f:
@@ -86,20 +106,39 @@ class ExperimentTracker:
                         continue
                     try:
                         data = json.loads(raw)
-                        if data.get("experiment_id") == record.experiment_id:
-                            lines.append(json.dumps(record.to_dict(), ensure_ascii=False))
-                            updated = True
-                        else:
-                            lines.append(raw)
+                        experiment_id = data.get("experiment_id")
                     except Exception:
+                        # Preserve legacy/corrupt lines for normal tracker callers.
+                        # Governance callers use load_all(strict=True) before mutation.
+                        lines.append(raw)
+                        continue
+
+                    if experiment_id in by_id:
+                        if experiment_id not in emitted:
+                            lines.append(
+                                json.dumps(
+                                    by_id[experiment_id].to_dict(),
+                                    ensure_ascii=False,
+                                )
+                            )
+                            emitted.add(experiment_id)
+                        # Drop duplicate old copies of the same target id.
+                    else:
                         lines.append(raw)
 
-        if not updated:
-            lines.append(json.dumps(record.to_dict(), ensure_ascii=False))
+        for experiment_id, record in by_id.items():
+            if experiment_id not in emitted:
+                lines.append(json.dumps(record.to_dict(), ensure_ascii=False))
 
-        with open(self.registry_path, "w", encoding="utf-8") as f:
+        tmp_path = self.registry_path.with_suffix(
+            self.registry_path.suffix + ".tmp"
+        )
+        with open(tmp_path, "w", encoding="utf-8") as f:
             for line in lines:
                 f.write(line + "\n")
+            f.flush()
+            os.fsync(f.fileno())
+        tmp_path.replace(self.registry_path)
 
     def load_all(self, *, strict: bool = False) -> List[ExperimentRecord]:
         if not self.registry_path.exists():
