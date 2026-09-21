@@ -29,16 +29,37 @@ class ExperimentRecord:
     next_step: str = ""
     cost_estimate_usd: Optional[float] = None
     cost_usd: Optional[float] = None
+    candidate_version: Optional[str] = None
+    data_scale: Optional[str] = None
+    minimum_sufficient_scale: Optional[str] = None
+    evidence_scope: Optional[str] = None
+    promotion_rule: Optional[str] = None
+    scale_action: Optional[str] = None
+    scale_parent_experiment_id: Optional[str] = None
+    estimated_gpu_hours: Optional[float] = None
+    actual_gpu_hours: Optional[float] = None
     extra_fields: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
         d = asdict(self)
         extra = d.pop("extra_fields", {})
         d.update(extra)
-        if d.get("cost_estimate_usd") is None:
-            d.pop("cost_estimate_usd", None)
-        if d.get("cost_usd") is None:
-            d.pop("cost_usd", None)
+        optional_fields = (
+            "cost_estimate_usd",
+            "cost_usd",
+            "candidate_version",
+            "data_scale",
+            "minimum_sufficient_scale",
+            "evidence_scope",
+            "promotion_rule",
+            "scale_action",
+            "scale_parent_experiment_id",
+            "estimated_gpu_hours",
+            "actual_gpu_hours",
+        )
+        for key in optional_fields:
+            if d.get(key) is None:
+                d.pop(key, None)
         return d
 
 
