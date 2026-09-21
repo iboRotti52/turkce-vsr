@@ -58,8 +58,15 @@ class HFDatasetDownloader:
         self.hf_token = hf_token or os.environ.get("HF_TOKEN") or None
         self.max_local_gb = max_local_gb
 
-        self.manifest_dir = self.target_dir / "manifests"
-        self.clips_dir = self.target_dir / "clips"
+        # Pinned snapshots must never share mutable local cache paths. Otherwise
+        # a second revision could silently reuse accepted.csv/clips from an older run.
+        self.data_dir = (
+            self.target_dir / "_revisions" / self.revision
+            if self.revision
+            else self.target_dir
+        )
+        self.manifest_dir = self.data_dir / "manifests"
+        self.clips_dir = self.data_dir / "clips"
         self._split_map: Optional[Dict[str, Any]] = None
 
     def _get_split_map(self) -> Dict[str, Any]:
@@ -256,7 +263,33 @@ class HFDatasetDownloader:
 
         patterns = allow_patterns or ["data/iborotti/*"]
 
-        # Doğrudan target_dir içine indirme (çift kopyalamayı ve disk şişmesini önler)
+        # Immutable revisions get their own local directory so two research
+        # snapshots can never overwrite/reuse one another.
+        if self.revision:
+            cache_dir = snapshot_download(
+                repo_id=self.repo_id,
+                repo_type="dataset",
+                allow_patterns=patterns,
+                token=self.hf_token,
+                revision=self.revision,
+            )
+            import shutil
+            src_inner = pathlib.Path(cache_dir) / "data" / "iborotti"
+            if not src_inner.exists():
+                raise FileNotFoundError(
+                    f"HF snapshot beklenen data/iborotti yapısını içermiyor: {src_inner}"
+                )
+            self.data_dir.mkdir(parents=True, exist_ok=True)
+            for child in src_inner.iterdir():
+                dest_child = self.data_dir / child.name
+                if child.is_dir():
+                    shutil.copytree(child, dest_child, dirs_exist_ok=True)
+                else:
+                    shutil.copyfile(child, dest_child)
+            print(f"✅ Pinned tam indirme tamamlandı: {self.data_dir}")
+            return self.data_dir
+
+        # Unpinned legacy/local behavior is preserved for historical tooling.
         if self.target_dir.name == "iborotti" and self.target_dir.parent.name == "data":
             root_dir = self.target_dir.parent.parent
             snapshot_download(
