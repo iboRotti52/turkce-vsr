@@ -38,6 +38,8 @@ class ExperimentRecord:
     scale_parent_experiment_id: Optional[str] = None
     estimated_gpu_hours: Optional[float] = None
     actual_gpu_hours: Optional[float] = None
+    technical_status: Optional[str] = None
+    scientific_verdict: Optional[str] = None
     extra_fields: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -56,6 +58,8 @@ class ExperimentRecord:
             "scale_parent_experiment_id",
             "estimated_gpu_hours",
             "actual_gpu_hours",
+            "technical_status",
+            "scientific_verdict",
         )
         for key in optional_fields:
             if d.get(key) is None:
