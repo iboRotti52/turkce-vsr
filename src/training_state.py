@@ -50,8 +50,12 @@ def build_training_checkpoint(
         "dataset_id",
         "dataset_revision",
         "split_map_sha256",
+        "train_subset_sha256",
+        "candidate_recipe_sha256",
         "code_revision",
         "candidate_version",
+        "seed",
+        "initializer_id",
     )
     missing = [key for key in required if not provenance.get(key)]
     if missing:
@@ -96,8 +100,12 @@ def _require_same_provenance(
         "dataset_id",
         "dataset_revision",
         "split_map_sha256",
+        "train_subset_sha256",
+        "candidate_recipe_sha256",
         "code_revision",
         "candidate_version",
+        "seed",
+        "initializer_id",
     )
     mismatches = {
         key: (saved.get(key), expected.get(key))
