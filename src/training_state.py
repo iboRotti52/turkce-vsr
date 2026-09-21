@@ -58,9 +58,25 @@ def build_training_checkpoint(
         "initializer_id",
         "initializer_sha256",
     )
-    missing = [key for key in required if not provenance.get(key)]
+    missing = [
+        key
+        for key in required
+        if key not in provenance or provenance[key] is None or provenance[key] == ""
+    ]
     if missing:
         raise ValueError(f"Checkpoint provenance eksik: {missing}")
+
+    for key, expected_length in (
+        ("dataset_revision", 40),
+        ("split_map_sha256", 64),
+        ("train_subset_sha256", 64),
+        ("candidate_recipe_sha256", 64),
+        ("code_revision", 40),
+        ("initializer_sha256", 64),
+    ):
+        value = str(provenance[key]).lower()
+        if len(value) != expected_length or any(ch not in "0123456789abcdef" for ch in value):
+            raise ValueError(f"Geçersiz provenance hash/revision: {key}={provenance[key]!r}")
 
     payload: Dict[str, Any] = {
         "checkpoint_schema_version": CHECKPOINT_SCHEMA_VERSION,
@@ -107,6 +123,7 @@ def _require_same_provenance(
         "candidate_version",
         "seed",
         "initializer_id",
+        "initializer_sha256",
     )
     mismatches = {
         key: (saved.get(key), expected.get(key))
