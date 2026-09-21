@@ -73,8 +73,11 @@ yeni split/stage planı hazırlanır:
 
 Bu komut full dataset'i veya GPU eğitimini başlatmaz. Şunları üretir:
 
-- `research/large_data_plan.json`: dataset revision, split/stage özetleri ve hash'ler.
-- `data/metadata/split_map_large_data.json`: sıfırdan üretilmiş speaker-disjoint split.
+- `research/large_data_plan.json`: dataset revision, kullanılan speaker identity alanı,
+  proxy olup olmadığı, split/stage özetleri ve hash'ler.
+- `data/metadata/split_map_large_data.json`: sıfırdan üretilmiş identity-group-disjoint
+  split. Manifest yalnız `channel` sağlıyorsa bu gerçek kişi kimliği değil speaker
+  proxy'dir; aynı kanalda birden fazla konuşmacı olup olmadığı ayrıca audit edilmelidir.
 - Train içinde mümkün olduğu kadar speaker-diverse ve **nested** 10h → 25h → 50h →
   100h aşamaları (mevcut train süresi hedefe yetmiyorsa o aşama üretilmez; `full`
   her zaman gerçek kullanılabilir train kümesini temsil eder).
