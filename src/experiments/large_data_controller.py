@@ -524,7 +524,6 @@ def register_promoted_experiment(
         scale_action=ScaleAction.PROMOTE_SCALE.value,
         extra_fields=source_extra,
     )
-    tracker.log(updated_source)
 
     child_setup = dict(source.setup)
     child_setup.update(
@@ -564,7 +563,7 @@ def register_promoted_experiment(
         technical_status="IN_PROGRESS",
     )
     child = seal_pre_result_contract(child)
-    tracker.log(child)
+    tracker.log_many([updated_source, child])
     return child
 
 
