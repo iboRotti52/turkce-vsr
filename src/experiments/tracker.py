@@ -101,23 +101,31 @@ class ExperimentTracker:
             for line in lines:
                 f.write(line + "\n")
 
-    def load_all(self) -> List[ExperimentRecord]:
+    def load_all(self, *, strict: bool = False) -> List[ExperimentRecord]:
         if not self.registry_path.exists():
             return []
         import dataclasses
         valid_fields = {f.name for f in dataclasses.fields(ExperimentRecord)}
         records = []
         with open(self.registry_path, "r", encoding="utf-8") as f:
-            for line in f:
+            for line_number, line in enumerate(f, start=1):
                 line = line.strip()
-                if line:
-                    try:
-                        data = json.loads(line)
-                        known = {k: v for k, v in data.items() if k in valid_fields and k != "extra_fields"}
-                        extra = {k: v for k, v in data.items() if k not in valid_fields}
-                        records.append(ExperimentRecord(**known, extra_fields=extra))
-                    except Exception:
-                        pass
+                if not line:
+                    continue
+                try:
+                    data = json.loads(line)
+                    known = {
+                        k: v
+                        for k, v in data.items()
+                        if k in valid_fields and k != "extra_fields"
+                    }
+                    extra = {k: v for k, v in data.items() if k not in valid_fields}
+                    records.append(ExperimentRecord(**known, extra_fields=extra))
+                except Exception as exc:
+                    if strict:
+                        raise RuntimeError(
+                            f"Experiment registry parse hatası line={line_number}: {exc}"
+                        ) from exc
         return records
 
     def print_summary(self) -> None:
