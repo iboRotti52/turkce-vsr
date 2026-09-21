@@ -59,6 +59,13 @@ def build_training_checkpoint(
 
     payload: Dict[str, Any] = {
         "checkpoint_schema_version": CHECKPOINT_SCHEMA_VERSION,
+        # Training-state resume is supported at epoch boundaries. Model/optimizer/
+        # scheduler/scaler/RNG state is restored, but stochastic DataLoader worker
+        # augmentation streams are not claimed to be bitwise replayable after a
+        # process restart.
+        "resume_granularity": "epoch_boundary",
+        "last_completed_epoch": int(epoch),
+        "next_epoch": int(epoch) + 1,
         "epoch": int(epoch),
         "global_step": int(global_step),
         "sampler_epoch": int(sampler_epoch if sampler_epoch is not None else epoch),
@@ -124,6 +131,10 @@ def restore_training_checkpoint(
             "Desteklenmeyen checkpoint schema: "
             f"{payload.get('checkpoint_schema_version')}"
         )
+    if payload.get("resume_granularity") != "epoch_boundary":
+        raise RuntimeError(
+            f"Desteklenmeyen resume granularity: {payload.get('resume_granularity')}"
+        )
     saved_provenance = payload.get("provenance") or {}
     _require_same_provenance(saved_provenance, expected_provenance)
 
@@ -144,6 +155,9 @@ def restore_training_checkpoint(
 
     return {
         "epoch": int(payload["epoch"]),
+        "last_completed_epoch": int(payload.get("last_completed_epoch", payload["epoch"])),
+        "next_epoch": int(payload.get("next_epoch", int(payload["epoch"]) + 1)),
+        "resume_granularity": payload["resume_granularity"],
         "global_step": int(payload["global_step"]),
         "sampler_epoch": int(payload.get("sampler_epoch", payload["epoch"])),
         "metrics": payload.get("metrics") or {},
