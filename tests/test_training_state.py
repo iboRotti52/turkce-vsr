@@ -28,7 +28,8 @@ def _provenance(revision="a" * 40):
         "code_revision": "c" * 40,
         "candidate_version": "c0.5.0",
         "seed": 42,
-        "initializer_id": "auto-avsr:vsr_trlrs3_base@sha256:example",
+        "initializer_id": "auto-avsr:vsr_trlrs3_base",
+        "initializer_sha256": "f" * 64,
     }
 
 
