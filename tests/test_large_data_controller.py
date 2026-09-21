@@ -57,6 +57,12 @@ def _source_record(
     )
 
 
+def _persist_source(tmp_path, source, name="registry.jsonl"):
+    tracker = ExperimentTracker(tmp_path / name)
+    tracker.log(source)
+    return tracker
+
+
 def test_scales_follow_available_plan():
     assert ordered_research_scales(_large_data_plan()) == (
         "smoke",
@@ -144,7 +150,7 @@ def test_non_smoke_run_requires_predeclared_promotion_rule():
         )
 
 
-def test_accept_can_promote_only_with_predeclared_rule_met():
+def test_accept_can_promote_only_with_predeclared_rule_met(tmp_path):
     rule = "Promote if WER improves >= 3% relative with no subgroup collapse."
     request = PromotionRequest(
         question_id="ARCH-LD-001",
@@ -159,15 +165,18 @@ def test_accept_can_promote_only_with_predeclared_rule_met():
         estimated_gpu_hours=2.0,
         estimated_cost_usd=1.4,
     )
+    source = _source_record(promotion_rule=rule)
+    tracker = _persist_source(tmp_path, source, "accept.jsonl")
     validate_promotion_request(
         request,
-        source_experiment=_source_record(promotion_rule=rule),
+        tracker=tracker,
+        source_experiment_id=source.experiment_id,
         large_data_plan=_large_data_plan(),
         remaining_budget_usd=8.0,
     )
 
 
-def test_promotion_rule_cannot_be_changed_after_result():
+def test_promotion_rule_cannot_be_changed_after_result(tmp_path):
     source = _source_record(promotion_rule="Original predeclared rule.")
     request = PromotionRequest(
         question_id="ARCH-LD-001",
@@ -182,17 +191,20 @@ def test_promotion_rule_cannot_be_changed_after_result():
         estimated_gpu_hours=2.0,
         estimated_cost_usd=1.0,
     )
+    tracker = _persist_source(tmp_path, source, "rule_change.jsonl")
     with pytest.raises(RuntimeError, match="değiştirilemez"):
         validate_promotion_request(
             request,
-            source_experiment=source,
+            tracker=tracker,
+            source_experiment_id=source.experiment_id,
             large_data_plan=_large_data_plan(),
             remaining_budget_usd=8.0,
         )
 
 
-def test_inconclusive_is_not_automatic_promotion():
-    source = _source_record()
+def test_inconclusive_is_not_automatic_promotion(tmp_path):
+    source = _source_record(scientific_verdict=ScientificVerdict.INCONCLUSIVE)
+    tracker = _persist_source(tmp_path, source, "inconclusive.jsonl")
     base = dict(
         question_id="ARCH-LD-001",
         candidate_version="c0.5.0",
@@ -209,7 +221,8 @@ def test_inconclusive_is_not_automatic_promotion():
     with pytest.raises(RuntimeError, match="otomatik scale promotion"):
         validate_promotion_request(
             PromotionRequest(**base),
-            source_experiment=source,
+            tracker=tracker,
+            source_experiment_id=source.experiment_id,
             large_data_plan=_large_data_plan(),
             remaining_budget_usd=8.0,
         )
@@ -229,8 +242,9 @@ def test_inconclusive_is_not_automatic_promotion():
     )
 
 
-def test_rejected_hypothesis_cannot_be_promoted():
-    source = _source_record()
+def test_rejected_hypothesis_cannot_be_promoted(tmp_path):
+    source = _source_record(scientific_verdict=ScientificVerdict.REJECT)
+    tracker = _persist_source(tmp_path, source, "reject.jsonl")
     request = PromotionRequest(
         question_id="ARCH-LD-001",
         candidate_version="c0.5.0",
@@ -247,14 +261,16 @@ def test_rejected_hypothesis_cannot_be_promoted():
     with pytest.raises(RuntimeError, match="REJECT"):
         validate_promotion_request(
             request,
-            source_experiment=source,
+            tracker=tracker,
+            source_experiment_id=source.experiment_id,
             large_data_plan=_large_data_plan(),
             remaining_budget_usd=8.0,
         )
 
 
-def test_scale_skipping_requires_explicit_justification():
+def test_scale_skipping_requires_explicit_justification(tmp_path):
     source = _source_record()
+    tracker = _persist_source(tmp_path, source, "skip.jsonl")
     request = PromotionRequest(
         question_id="ARCH-LD-001",
         candidate_version="c0.5.0",
@@ -271,7 +287,8 @@ def test_scale_skipping_requires_explicit_justification():
     with pytest.raises(ValueError, match="skip_scale_justification"):
         validate_promotion_request(
             request,
-            source_experiment=source,
+            tracker=tracker,
+            source_experiment_id=source.experiment_id,
             large_data_plan=_large_data_plan(),
             remaining_budget_usd=8.0,
         )
@@ -283,31 +300,35 @@ def test_scaling_curve_is_candidate_question_and_scale_scoped():
             experiment_id="e25",
             hypothesis="h",
             falsification_criteria="f",
-            setup={"question_id": "ARCH-LD-001"},
+            setup={"question_id": "ARCH-LD-001", "dataset_revision": "a" * 40},
             expectation="x",
             result={"wer": 0.25},
             status="PASSED",
             candidate_version="c0.5.0",
             data_scale="25h",
             evidence_scope=EvidenceScope.LARGE_DATA_REGIME.value,
+            technical_status="COMPLETED",
+            scientific_verdict=ScientificVerdict.ACCEPT.value,
         ),
         ExperimentRecord(
             experiment_id="e10",
             hypothesis="h",
             falsification_criteria="f",
-            setup={"question_id": "ARCH-LD-001"},
+            setup={"question_id": "ARCH-LD-001", "dataset_revision": "a" * 40},
             expectation="x",
             result={"metrics": {"wer": 0.32}},
             status="PASSED",
             candidate_version="c0.5.0",
             data_scale="10h",
             evidence_scope=EvidenceScope.LARGE_DATA_REGIME.value,
+            technical_status="COMPLETED",
+            scientific_verdict=ScientificVerdict.ACCEPT.value,
         ),
         ExperimentRecord(
             experiment_id="wrong_candidate",
             hypothesis="h",
             falsification_criteria="f",
-            setup={"question_id": "ARCH-LD-001"},
+            setup={"question_id": "ARCH-LD-001", "dataset_revision": "a" * 40},
             expectation="x",
             result={"wer": 0.10},
             status="PASSED",
@@ -319,6 +340,7 @@ def test_scaling_curve_is_candidate_question_and_scale_scoped():
         records,
         question_id="ARCH-LD-001",
         candidate_version="c0.5.0",
+        dataset_revision="a" * 40,
         metric="wer",
         large_data_plan=_large_data_plan(),
     )
@@ -412,7 +434,7 @@ def test_completion_separates_technical_status_from_scientific_verdict(tmp_path)
     assert started.scientific_verdict is None
 
     completed = complete_scale_experiment(
-        started,
+        started.experiment_id,
         tracker=tracker,
         result={"wer": 0.33, "long_wer": 0.41},
         scientific_verdict=ScientificVerdict.INCONCLUSIVE,
@@ -469,7 +491,92 @@ def test_in_progress_experiment_cannot_be_promoted(tmp_path):
     with pytest.raises(RuntimeError, match="Tamamlanmamış"):
         validate_promotion_request(
             request,
-            source_experiment=started,
+            tracker=tracker,
+            source_experiment_id=started.experiment_id,
             large_data_plan=_large_data_plan(),
             remaining_budget_usd=4.0,
         )
+
+
+def test_registration_cannot_overwrite_predeclared_metadata(tmp_path):
+    tracker = ExperimentTracker(tmp_path / "registry.jsonl")
+    plan = ScaleExperimentPlan(
+        question_id="ARCH-LD-777",
+        candidate_version="c0.5.0",
+        hypothesis="Test one architecture.",
+        requested_scale="10h",
+        minimum_sufficient_scale="10h",
+        falsification_criteria="No WER gain.",
+        expectation="Lower WER.",
+        information_gain_rationale="10h can distinguish the hypothesis.",
+        why_smaller_scale_is_insufficient="Smoke cannot estimate validation WER.",
+        promotion_rule="Promote if WER improves >= 3%.",
+        estimated_gpu_hours=1.0,
+        estimated_cost_usd=0.5,
+    )
+    register_scale_experiment(
+        plan,
+        tracker=tracker,
+        experiment_id="probe_arch_ld777_10h",
+        large_data_plan=_large_data_plan(),
+        remaining_budget_usd=5.0,
+    )
+    changed = ScaleExperimentPlan(
+        **{**plan.__dict__, "promotion_rule": "Easier rule after the fact."}
+    )
+    with pytest.raises(RuntimeError, match="overwrite edilemez"):
+        register_scale_experiment(
+            changed,
+            tracker=tracker,
+            experiment_id="probe_arch_ld777_10h",
+            large_data_plan=_large_data_plan(),
+            remaining_budget_usd=5.0,
+        )
+
+
+def test_unknown_stage_fails_closed():
+    plan = {"staged_subsets": {"10h": ["a"], "mystery": ["b"]}}
+    with pytest.raises(ValueError, match="Bilinmeyen large-data stage"):
+        ordered_research_scales(plan)
+
+
+def test_scaling_curve_does_not_mix_dataset_revisions():
+    records = [
+        ExperimentRecord(
+            experiment_id="old_revision",
+            hypothesis="h",
+            falsification_criteria="f",
+            setup={"question_id": "ARCH-LD-001", "dataset_revision": "a" * 40},
+            expectation="x",
+            result={"wer": 0.30},
+            status="PASSED",
+            candidate_version="c0.5.0",
+            data_scale="10h",
+            technical_status="COMPLETED",
+            scientific_verdict="ACCEPT",
+        ),
+        ExperimentRecord(
+            experiment_id="new_revision",
+            hypothesis="h",
+            falsification_criteria="f",
+            setup={"question_id": "ARCH-LD-001", "dataset_revision": "b" * 40},
+            expectation="x",
+            result={"wer": 0.20},
+            status="PASSED",
+            candidate_version="c0.5.0",
+            data_scale="10h",
+            technical_status="COMPLETED",
+            scientific_verdict="ACCEPT",
+        ),
+    ]
+    curve = build_scaling_curve(
+        records,
+        question_id="ARCH-LD-001",
+        candidate_version="c0.5.0",
+        dataset_revision="a" * 40,
+        metric="wer",
+        large_data_plan=_large_data_plan(),
+    )
+    assert [(p.experiment_id, p.value) for p in curve] == [
+        ("old_revision", 0.30)
+    ]
