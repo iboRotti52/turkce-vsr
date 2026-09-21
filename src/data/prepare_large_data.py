@@ -93,6 +93,10 @@ def main(argv=None) -> int:
     print("LARGE-DATA RESEARCH PLAN (training başlamadı)")
     print("=" * 72)
     print(f"dataset: {payload['dataset_id']} @ {payload['dataset_revision']}")
+    identity_kind = "PROXY — insan audit'i gerekli" if payload["speaker_identity_is_proxy"] else "explicit"
+    print(
+        f"speaker identity: {payload['speaker_identity_field']} ({identity_kind})"
+    )
     print(f"split hash: {payload['split_map_sha256']}")
     print("split summary:")
     for split, summary in payload["split_summary"].items():
@@ -102,6 +106,11 @@ def main(argv=None) -> int:
         print(f"  {stage}: {summary}")
     print(f"plan: {output}")
     print(f"split map: {split_output}")
+    if payload["speaker_identity_is_proxy"]:
+        print(
+            "UYARI: split channel/creator proxy kimliği kullanıyor; aynı kanalda birden fazla "
+            "konuşmacı varsa gerçek speaker leakage ayrıca audit edilmelidir."
+        )
     print("Test split yalnız final/milestone evaluation içindir; araştırma selection'ına açılmaz.")
     return 0
 
