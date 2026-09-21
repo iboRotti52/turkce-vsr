@@ -112,31 +112,49 @@ def build_speaker_disjoint_split(
 
     rng = random.Random(seed)
     rng.shuffle(speakers)
+    # Stable sort: the shuffle above only breaks equal-duration ties.
     speakers.sort(key=lambda s: speaker_seconds[s], reverse=True)
 
     total = sum(speaker_seconds.values())
+    if total <= 0:
+        raise ValueError("Manifest konuşmacı süreleri sıfır; duration-balanced split üretilemez.")
+
     target = {
+        "train": total * (1.0 - val_fraction - test_fraction),
         "val": total * val_fraction,
         "test": total * test_fraction,
-        "train": total * (1.0 - val_fraction - test_fraction),
     }
     assigned_seconds = {"train": 0.0, "val": 0.0, "test": 0.0}
+    assigned_speakers = {"train": 0, "val": 0, "test": 0}
     speaker_split: Dict[str, str] = {}
+    split_order = ("train", "val", "test")
 
-    # Seed each split with one speaker so no split can silently disappear.
-    initial_order = ["test", "val", "train"]
-    for split, speaker in zip(initial_order, speakers[:3]):
+    for idx, speaker in enumerate(speakers):
+        remaining_after = len(speakers) - idx - 1
+        empty_splits = [s for s in split_order if assigned_speakers[s] == 0]
+
+        # If there are only enough speakers left to populate currently-empty
+        # splits, force this speaker into one of them. Otherwise choose freely.
+        candidates = (
+            empty_splits
+            if empty_splits and remaining_after < len(empty_splits)
+            else list(split_order)
+        )
+
+        def score(candidate: str) -> Tuple[float, int]:
+            proposed = dict(assigned_seconds)
+            proposed[candidate] += speaker_seconds[speaker]
+            normalized_error = sum(
+                ((proposed[s] - target[s]) / max(target[s], 1.0)) ** 2
+                for s in split_order
+            )
+            # Deterministic tie-breaker prefers train, then val, then test.
+            return normalized_error, split_order.index(candidate)
+
+        split = min(candidates, key=score)
         speaker_split[speaker] = split
         assigned_seconds[split] += speaker_seconds[speaker]
-
-    for speaker in speakers[3:]:
-        # Choose the split most below its target in relative terms.
-        def deficit(split: str) -> float:
-            return (target[split] - assigned_seconds[split]) / max(target[split], 1.0)
-
-        split = max(("train", "val", "test"), key=lambda x: (deficit(x), x == "train"))
-        speaker_split[speaker] = split
-        assigned_seconds[split] += speaker_seconds[speaker]
+        assigned_speakers[split] += 1
 
     result: Dict[str, Dict[str, str]] = {}
     for item_id, speaker in sorted(item_to_speaker.items()):
