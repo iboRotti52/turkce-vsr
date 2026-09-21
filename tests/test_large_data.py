@@ -9,6 +9,8 @@ from src.data.large_data import (
     build_speaker_diverse_training_stages,
     validate_speaker_disjoint_split,
 )
+from src.data.large_data_loader import build_large_data_loader
+from src.data.dataset import SequenceBucketSampler
 
 
 def _rows():
@@ -100,3 +102,32 @@ def test_large_data_plan_pins_revision_and_hashes_split():
     assert len(payload["split_map_sha256"]) == 64
     assert len(payload["plan_sha256"]) == 64
     assert payload["split_summary"]["test"]["speakers"] >= 1
+
+
+def test_large_data_loader_uses_duration_buckets_and_rejects_ram_cache():
+    class Dataset:
+        def __init__(self, cache=False):
+            self.cache_in_ram = cache
+            self.samples = [
+                {"duration": 2.0},
+                {"duration": 5.0},
+                {"duration": 9.0},
+                {"duration": 2.5},
+            ]
+
+        def __len__(self):
+            return len(self.samples)
+
+        def __getitem__(self, idx):
+            raise AssertionError("Loader construction should not fetch samples")
+
+    loader = build_large_data_loader(Dataset(), train=True, num_workers=0)
+    assert isinstance(loader.batch_sampler, SequenceBucketSampler)
+
+    val_loader = build_large_data_loader(
+        Dataset(), train=False, num_workers=0, batch_size=3
+    )
+    assert val_loader.batch_size == 3
+
+    with pytest.raises(ValueError, match="RAM cache"):
+        build_large_data_loader(Dataset(cache=True), train=True, num_workers=0)
