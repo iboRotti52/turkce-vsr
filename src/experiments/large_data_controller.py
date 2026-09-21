@@ -315,8 +315,14 @@ def validate_scale_experiment_plan(
             "hipotezi ayırt edemeyeceği açıkça yazılmalıdır."
         )
 
-    # Any non-smoke run must declare the rule that would justify spending more.
-    if experiment.requested_scale != VIRTUAL_SMOKE_SCALE and not experiment.promotion_rule.strip():
+    # A run with a larger available stage must predeclare the rule that would
+    # justify spending more. The final available scale has nowhere to promote.
+    has_larger_scale = requested_idx + 1 < len(scales)
+    if (
+        experiment.requested_scale != VIRTUAL_SMOKE_SCALE
+        and has_larger_scale
+        and not experiment.promotion_rule.strip()
+    ):
         raise ValueError(
             "Large-data araştırma koşusu promotion_rule olmadan başlatılamaz."
         )
@@ -517,6 +523,7 @@ def register_promoted_experiment(
     tracker: "ExperimentTracker",
     source_experiment_id: str,
     target_experiment_id: str,
+    target_promotion_rule: str,
     large_data_plan: Mapping[str, Any],
     remaining_budget_usd: float,
 ) -> ExperimentRecord:
@@ -537,6 +544,15 @@ def register_promoted_experiment(
         remaining_budget_usd=remaining_budget_usd,
     )
     source = _find_registry_record(tracker, source_experiment_id)
+    scales = ordered_research_scales(large_data_plan)
+    target_has_larger_scale = _next_scale(scales, request.to_scale) is not None
+    if target_has_larger_scale and not target_promotion_rule.strip():
+        raise ValueError(
+            "Promoted child için bir sonraki scale promotion rule sonuçtan önce yazılmalıdır."
+        )
+    if not target_has_larger_scale:
+        target_promotion_rule = ""
+
     target_hash = _stage_sample_hash(large_data_plan, request.to_scale)
     _require_large_data_identity(large_data_plan, request.to_scale)
 
@@ -588,7 +604,7 @@ def register_promoted_experiment(
         data_scale=request.to_scale,
         minimum_sufficient_scale=source.minimum_sufficient_scale,
         evidence_scope=source.evidence_scope,
-        promotion_rule=source.promotion_rule,
+        promotion_rule=target_promotion_rule or None,
         scale_action=ScaleAction.STOP.value,
         scale_parent_experiment_id=source_experiment_id,
         estimated_gpu_hours=request.estimated_gpu_hours,
@@ -671,6 +687,10 @@ def validate_promotion_request(
 
     if source.get("technical_status") != "COMPLETED":
         raise RuntimeError("Tamamlanmamış deney scale promotion kaynağı olamaz.")
+    if source.get("scale_action") not in {None, ScaleAction.STOP.value}:
+        raise RuntimeError(
+            f"Source experiment zaten terminal scale action taşıyor: {source.get('scale_action')}"
+        )
     if source.get("scientific_verdict") != scientific_verdict.value:
         raise RuntimeError(
             "Promotion request scientific verdict source registry kaydıyla uyuşmuyor."
