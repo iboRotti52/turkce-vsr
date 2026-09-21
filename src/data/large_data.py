@@ -16,17 +16,48 @@ import random
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 
+SPEAKER_IDENTITY_FIELDS: Tuple[str, ...] = (
+    "speaker_id",
+    "speaker",
+    "channel",
+    "creator",
+    "source_channel",
+)
+PROXY_SPEAKER_FIELDS = frozenset({"channel", "creator", "source_channel"})
+
+
 def _canonical_sha256(value: Any) -> str:
     payload = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def _row_speaker(row: Mapping[str, Any]) -> str:
-    for key in ("speaker_id", "speaker", "channel", "creator", "source_channel"):
-        value = str(row.get(key, "")).strip()
-        if value:
-            return value
-    raise ValueError("Manifest satırında speaker/channel kimliği bulunamadı.")
+def resolve_speaker_identity_field(rows: Sequence[Mapping[str, Any]]) -> str:
+    """Choose one identity field that is populated for every accepted row.
+
+    Mixing speaker_id for some rows with channel for others would make leakage
+    guarantees semantically inconsistent, so large-data planning fails closed.
+    """
+    for key in SPEAKER_IDENTITY_FIELDS:
+        if rows and all(str(row.get(key, "")).strip() for row in rows):
+            return key
+    raise ValueError(
+        "Tüm accepted satırlarda ortak bir speaker identity alanı yok. "
+        "speaker_id/speaker tercih edilir; channel yalnız proxy olarak kullanılabilir."
+    )
+
+
+def _row_speaker(row: Mapping[str, Any], speaker_field: Optional[str] = None) -> str:
+    key = speaker_field
+    if key is None:
+        for candidate in SPEAKER_IDENTITY_FIELDS:
+            value = str(row.get(candidate, "")).strip()
+            if value:
+                return value
+        raise ValueError("Manifest satırında speaker/channel kimliği bulunamadı.")
+    value = str(row.get(key, "")).strip()
+    if not value:
+        raise ValueError(f"Manifest satırında speaker identity alanı boş: {key}")
+    return value
 
 
 def _row_duration(row: Mapping[str, Any]) -> float:
@@ -49,6 +80,8 @@ class LargeDataPlan:
     dataset_id: str
     dataset_revision: str
     seed: int
+    speaker_identity_field: str
+    speaker_identity_is_proxy: bool
     split_map: Dict[str, Dict[str, str]]
     split_summary: Dict[str, Dict[str, float]]
     staged_subsets: Dict[str, List[str]]
@@ -60,6 +93,8 @@ class LargeDataPlan:
             "dataset_id": self.dataset_id,
             "dataset_revision": self.dataset_revision,
             "seed": self.seed,
+            "speaker_identity_field": self.speaker_identity_field,
+            "speaker_identity_is_proxy": self.speaker_identity_is_proxy,
             "split_map": self.split_map,
             "split_summary": self.split_summary,
             "staged_subsets": self.staged_subsets,
@@ -76,6 +111,7 @@ def build_speaker_disjoint_split(
     seed: int = 42,
     val_fraction: float = 0.10,
     test_fraction: float = 0.10,
+    speaker_field: Optional[str] = None,
 ) -> Dict[str, Dict[str, str]]:
     """Assign each speaker to exactly one split, balancing by total duration.
 
@@ -90,12 +126,13 @@ def build_speaker_disjoint_split(
     if val_fraction + test_fraction >= 0.8:
         raise ValueError("Train için yeterli pay bırakılmalıdır.")
 
+    resolved_speaker_field = speaker_field or resolve_speaker_identity_field(rows)
     speaker_items: Dict[str, set[str]] = defaultdict(set)
     speaker_seconds: Dict[str, float] = defaultdict(float)
     item_to_speaker: Dict[str, str] = {}
 
     for row in rows:
-        speaker = _row_speaker(row)
+        speaker = _row_speaker(row, resolved_speaker_field)
         item_id = str(row.get("item_id", "")).strip()
         if not item_id:
             raise ValueError("Manifest satırında item_id zorunludur.")
@@ -296,9 +333,28 @@ def build_large_data_plan(
     normalized_revision = dataset_revision.strip().lower()
     if len(normalized_revision) != 40 or any(ch not in "0123456789abcdef" for ch in normalized_revision):
         raise ValueError("dataset_revision immutable 40-hex Hugging Face commit SHA olmalıdır.")
+    if not rows:
+        raise ValueError("Large-data plan için accepted manifest boş olamaz.")
 
+    seen_sample_ids: set[str] = set()
+    for row in rows:
+        sample_id = _row_id(row)
+        if sample_id in seen_sample_ids:
+            raise ValueError(f"Accepted manifest duplicate sample içeriyor: {sample_id}")
+        seen_sample_ids.add(sample_id)
+        if _row_duration(row) <= 0.0:
+            raise ValueError(
+                f"Accepted manifest sample duration eksik/geçersiz: {sample_id}. "
+                "Saat bazlı scaling planı için pozitif duration zorunludur."
+            )
+
+    speaker_field = resolve_speaker_identity_field(rows)
     split_map = build_speaker_disjoint_split(
-        rows, seed=seed, val_fraction=val_fraction, test_fraction=test_fraction
+        rows,
+        seed=seed,
+        val_fraction=val_fraction,
+        test_fraction=test_fraction,
+        speaker_field=speaker_field,
     )
     validate_speaker_disjoint_split(split_map)
     staged, staged_summary = build_speaker_diverse_training_stages(
@@ -308,6 +364,8 @@ def build_large_data_plan(
         dataset_id=dataset_id,
         dataset_revision=normalized_revision,
         seed=seed,
+        speaker_identity_field=speaker_field,
+        speaker_identity_is_proxy=speaker_field in PROXY_SPEAKER_FIELDS,
         split_map=split_map,
         split_summary=summarize_split(rows, split_map),
         staged_subsets=staged,
