@@ -3,7 +3,7 @@
 
 This command does not start training and does not download the full dataset.
 It downloads only lightweight manifest files from one immutable HF revision,
-then creates a speaker-disjoint split and nested speaker-diverse train stages.
+then creates an identity-group-disjoint split and nested diverse train stages.
 """
 
 from __future__ import annotations
@@ -51,7 +51,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--split-output",
         default="data/metadata/split_map_large_data.json",
-        help="Generated speaker-disjoint split map path.",
+        help="Generated identity-group-disjoint split map path.",
     )
     return parser
 
