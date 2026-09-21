@@ -116,7 +116,9 @@ def restore_training_checkpoint(
     if not path.is_file():
         raise FileNotFoundError(f"Resume checkpoint bulunamadı: {path}")
 
-    payload = torch.load(path, map_location=map_location)
+    # This is a trusted checkpoint produced by save_training_checkpoint and
+    # contains Python/NumPy RNG state in addition to tensor weights.
+    payload = torch.load(path, map_location=map_location, weights_only=False)
     if payload.get("checkpoint_schema_version") != CHECKPOINT_SCHEMA_VERSION:
         raise RuntimeError(
             "Desteklenmeyen checkpoint schema: "
