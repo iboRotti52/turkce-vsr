@@ -112,7 +112,9 @@ agentic_experiment_controller:
     non_smoke_run_requires_predeclared_promotion_rule: true
   outcomes:
     technical_status_separate_from_scientific_verdict: true
-    technical_terminal_state: COMPLETED
+    technical_terminal_states: [COMPLETED, ERROR]
+    technical_error_has_no_scientific_verdict: true
+    registry_governance_reads_are_strict: true
     scientific_verdicts: [ACCEPT, REJECT, INCONCLUSIVE]
     scale_actions: [STOP, RETEST_SAME_SCALE, PROMOTE_SCALE]
   promotion:
@@ -122,11 +124,21 @@ agentic_experiment_controller:
     inconclusive_does_not_automatically_promote: true
     inconclusive_may_promote_only_if_ambiguity_is_scale_sensitive: true
     skipping_intermediate_scale_requires_reason: true
+    source_dataset_revision_split_and_stage_must_match: true
+    source_can_promote_only_once: true
+    promoted_child_next_rule_predeclared_before_run: true
+    parent_child_registry_update_atomic: true
   cost_tracking:
     required_before_run:
       - estimated_gpu_hours
       - estimated_cost_usd
       - information_gain_rationale
+      - code_revision
+      - candidate_recipe_sha256
+      - seed
+      - initializer_id
+      - initializer_sha256
+      - pre_result_contract_sha256
     required_after_run:
       - actual_gpu_hours
       - actual_cost_usd
