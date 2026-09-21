@@ -1,0 +1,19 @@
+{
+  "question_id": "ARCH-LD-001",
+  "candidate_version": "c0.5.0",
+  "hypothesis": "Describe one falsifiable model hypothesis here.",
+  "requested_scale": "10h",
+  "minimum_sufficient_scale": "10h",
+  "information_gain_rationale": "Explain why this experiment is high-value and what uncertainty it resolves.",
+  "why_smaller_scale_is_insufficient": "Explain why smoke or a smaller available stage cannot reliably distinguish the hypothesis.",
+  "promotion_rule": "Before seeing results, define the evidence threshold required to justify spending on the next scale.",
+  "falsification_criteria": "State what result would falsify or materially weaken the hypothesis.",
+  "expectation": "State the observable result expected if the hypothesis is correct.",
+  "evidence_scope": "large_data_regime",
+  "estimated_gpu_hours": 1.0,
+  "estimated_cost_usd": 0.50,
+  "setup": {
+    "baseline_experiment_id": "replace-with-current-baseline-id",
+    "notes": "Optional non-governance setup metadata only. Provenance fields are injected by research_ops."
+  }
+}
