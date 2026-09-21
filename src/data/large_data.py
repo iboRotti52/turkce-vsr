@@ -10,6 +10,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 import hashlib
 import json
+import pathlib
 import random
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
@@ -125,7 +126,6 @@ def build_speaker_disjoint_split(
         raise ValueError("Train için yeterli pay bırakılmalıdır.")
 
     resolved_speaker_field = speaker_field or resolve_speaker_identity_field(rows)
-    speaker_items: Dict[str, set[str]] = defaultdict(set)
     speaker_seconds: Dict[str, float] = defaultdict(float)
     item_to_speaker: Dict[str, str] = {}
 
@@ -138,7 +138,6 @@ def build_speaker_disjoint_split(
         if previous is not None and previous != speaker:
             raise ValueError(f"item_id={item_id} birden fazla speaker ile eşleşiyor: {previous}, {speaker}")
         item_to_speaker[item_id] = speaker
-        speaker_items[speaker].add(item_id)
         speaker_seconds[speaker] += _row_duration(row)
 
     speakers = list(speaker_seconds)
@@ -379,3 +378,56 @@ def write_large_data_plan(path: pathlib.Path, plan: LargeDataPlan) -> None:
         json.dumps(plan.to_dict(), ensure_ascii=False, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
+
+
+
+def load_large_data_plan(path: pathlib.Path) -> Dict[str, Any]:
+    """Load and cryptographically verify a generated large-data plan."""
+    path = pathlib.Path(path)
+    if not path.is_file():
+        raise FileNotFoundError(f"Large-data plan bulunamadı: {path}")
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    expected_plan_hash = payload.get("plan_sha256")
+    if not expected_plan_hash:
+        raise RuntimeError("Large-data plan plan_sha256 içermiyor.")
+
+    unhashed = dict(payload)
+    unhashed.pop("plan_sha256", None)
+    actual_plan_hash = _canonical_sha256(unhashed)
+    if actual_plan_hash != expected_plan_hash:
+        raise RuntimeError(
+            f"Large-data plan hash uyuşmuyor: expected={expected_plan_hash}, actual={actual_plan_hash}"
+        )
+
+    split_map = payload.get("split_map") or {}
+    actual_split_hash = _canonical_sha256(split_map)
+    if actual_split_hash != payload.get("split_map_sha256"):
+        raise RuntimeError("Large-data plan içindeki split_map hash uyuşmuyor.")
+
+    stages = payload.get("staged_subsets") or {}
+    summaries = payload.get("staged_summary") or {}
+    for stage, sample_ids in stages.items():
+        summary = summaries.get(stage) or {}
+        expected_stage_hash = summary.get("sample_ids_sha256")
+        if not expected_stage_hash:
+            raise RuntimeError(f"Large-data stage hash eksik: {stage}")
+        if _canonical_sha256(sample_ids) != expected_stage_hash:
+            raise RuntimeError(f"Large-data stage sample hash uyuşmuyor: {stage}")
+    return payload
+
+
+def verify_large_data_split_file(
+    plan: Mapping[str, Any],
+    split_path: pathlib.Path,
+) -> None:
+    """Ensure the loader-facing split JSON is exactly the plan's canonical split."""
+    split_path = pathlib.Path(split_path)
+    if not split_path.is_file():
+        raise FileNotFoundError(f"Large-data split map bulunamadı: {split_path}")
+    split_map = json.loads(split_path.read_text(encoding="utf-8"))
+    actual_hash = _canonical_sha256(split_map)
+    expected_hash = plan.get("split_map_sha256")
+    if actual_hash != expected_hash:
+        raise RuntimeError(
+            f"Large-data split map drift tespit edildi: expected={expected_hash}, actual={actual_hash}"
+        )
