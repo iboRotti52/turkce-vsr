@@ -40,6 +40,7 @@ class ExperimentRecord:
     actual_gpu_hours: Optional[float] = None
     technical_status: Optional[str] = None
     scientific_verdict: Optional[str] = None
+    pre_result_contract_sha256: Optional[str] = None
     extra_fields: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -60,6 +61,7 @@ class ExperimentRecord:
             "actual_gpu_hours",
             "technical_status",
             "scientific_verdict",
+            "pre_result_contract_sha256",
         )
         for key in optional_fields:
             if d.get(key) is None:
