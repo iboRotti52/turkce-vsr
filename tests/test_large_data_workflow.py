@@ -65,7 +65,7 @@ def _rows():
                     {
                         "item_id": item_id,
                         "segment_id": f"{segment_idx:06d}",
-                        "duration": "1800",
+                        "duration": "2700",
                         "speaker_id": f"speaker-{speaker_idx}",
                         "text": "örnek türkçe cümle",
                     }
