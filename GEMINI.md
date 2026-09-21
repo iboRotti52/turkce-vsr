@@ -257,8 +257,12 @@ historical frozen evidence olarak korunur; yeni dataset geldiğinde önce
   eğitim makinesinde ölçerek ayarla.
 - Uzun eğitim checkpointleri model ağırlığı yanında optimizer, scheduler, AMP
   scaler, epoch/global step, sampler epoch, RNG state ve provenance taşımalıdır.
-  Resume sırasında dataset id/revision, split hash, code revision veya candidate
-  version değişmişse fail-closed dur.
+  Her training epoch öncesi custom bucket sampler'ın `set_epoch` durumu açıkça
+  ilerletilmelidir. Resume epoch-boundary sözleşmesidir; DataLoader worker
+  augmentation stream'lerinin crash sonrası bit-bit replay edildiğini iddia etme.
+  Resume sırasında dataset id/revision, split hash, train-stage sample hash,
+  candidate recipe hash, seed, initializer, code revision veya candidate version
+  değişmişse fail-closed dur.
 - Large-data plan audit edilmeden `c0.5.0` yaşayan candidate'ını açma. Açıldıktan
   sonra c0.4.0 mimarisini başlangıç prior'ı olarak kullanabilirsin; ancak veri
   miktarına/konuşmacı çeşitliliğine duyarlı training kararlarını otomatik doğru
