@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from enum import Enum
+import hashlib
+import json
 import pathlib
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
@@ -139,6 +141,56 @@ def _find_registry_record(tracker: "ExperimentTracker", experiment_id: str) -> E
     if len(matches) != 1:
         raise RuntimeError(f"Registry duplicate experiment_id içeriyor: {experiment_id}")
     return matches[0]
+
+
+def _pre_result_contract_payload(record: ExperimentRecord) -> Dict[str, Any]:
+    return {
+        "experiment_id": record.experiment_id,
+        "candidate_version": record.candidate_version,
+        "hypothesis": record.hypothesis,
+        "falsification_criteria": record.falsification_criteria,
+        "expectation": record.expectation,
+        "setup": record.setup,
+        "data_scale": record.data_scale,
+        "minimum_sufficient_scale": record.minimum_sufficient_scale,
+        "evidence_scope": record.evidence_scope,
+        "promotion_rule": record.promotion_rule,
+        "estimated_gpu_hours": record.estimated_gpu_hours,
+        "cost_estimate_usd": record.cost_estimate_usd,
+        "scale_parent_experiment_id": record.scale_parent_experiment_id,
+    }
+
+
+def compute_pre_result_contract_sha256(record: ExperimentRecord) -> str:
+    payload = json.dumps(
+        _pre_result_contract_payload(record),
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def seal_pre_result_contract(record: ExperimentRecord) -> ExperimentRecord:
+    """Attach a hash over metadata that must be fixed before seeing results."""
+    return replace(
+        record,
+        pre_result_contract_sha256=compute_pre_result_contract_sha256(record),
+    )
+
+
+def require_pre_result_contract_intact(record: ExperimentRecord) -> None:
+    expected = _require_hex(
+        record.pre_result_contract_sha256,
+        64,
+        "pre_result_contract_sha256",
+    )
+    actual = compute_pre_result_contract_sha256(record)
+    if actual != expected:
+        raise RuntimeError(
+            "Pre-result experiment contract değişmiş/tamper edilmiş; "
+            f"expected={expected}, actual={actual}"
+        )
 
 
 def _require_hex(value: Any, length: int, label: str) -> str:
@@ -295,6 +347,7 @@ def register_scale_experiment(
         cost_estimate_usd=experiment.estimated_cost_usd,
         technical_status="IN_PROGRESS",
     )
+    record = seal_pre_result_contract(record)
     tracker.log(record)
     return record
 
@@ -319,6 +372,7 @@ def complete_scale_experiment(
         raise TypeError("tracker ExperimentTracker olmalıdır.")
     _require_nonempty("experiment_id", experiment_id)
     record = _find_registry_record(tracker, experiment_id)
+    require_pre_result_contract_intact(record)
     if record.technical_status != "IN_PROGRESS":
         raise RuntimeError(
             f"Yalnız pre-registered IN_PROGRESS deney tamamlanabilir; mevcut={record.technical_status}"
@@ -364,6 +418,7 @@ def complete_scale_experiment(
         actual_gpu_hours=actual_gpu_hours,
         technical_status="COMPLETED",
         scientific_verdict=scientific_verdict.value,
+        pre_result_contract_sha256=record.pre_result_contract_sha256,
         extra_fields=dict(record.extra_fields),
     )
     tracker.log(completed)
@@ -455,6 +510,7 @@ def register_promoted_experiment(
         cost_estimate_usd=request.estimated_cost_usd,
         technical_status="IN_PROGRESS",
     )
+    child = seal_pre_result_contract(child)
     tracker.log(child)
     return child
 
@@ -489,6 +545,7 @@ def validate_promotion_request(
         _require_nonempty(label, value)
 
     source_experiment = _find_registry_record(tracker, source_experiment_id)
+    require_pre_result_contract_intact(source_experiment)
     source = source_experiment.to_dict()
     source_setup = source.get("setup") or {}
     if source_setup.get("question_id") != request.question_id:
@@ -497,6 +554,28 @@ def validate_promotion_request(
         raise ValueError("Promotion source experiment farklı candidate_version'a ait.")
     if source.get("data_scale") != request.from_scale:
         raise ValueError("Promotion from_scale source experiment ile uyuşmuyor.")
+
+    _require_large_data_identity(large_data_plan, request.from_scale)
+    _require_large_data_identity(large_data_plan, request.to_scale)
+    expected_dataset_revision = _require_hex(
+        large_data_plan.get("dataset_revision"), 40, "dataset_revision"
+    )
+    expected_split_hash = _require_hex(
+        large_data_plan.get("split_map_sha256"), 64, "split_map_sha256"
+    )
+    expected_source_stage_hash = _stage_sample_hash(
+        large_data_plan, request.from_scale
+    )
+    if source_setup.get("dataset_revision") != expected_dataset_revision:
+        raise RuntimeError("Promotion source farklı HF dataset revision'a ait.")
+    if source_setup.get("split_map_sha256") != expected_split_hash:
+        raise RuntimeError("Promotion source farklı split map'e ait.")
+    if (
+        expected_source_stage_hash is not None
+        and source_setup.get("train_subset_sha256") != expected_source_stage_hash
+    ):
+        raise RuntimeError("Promotion source farklı source-stage sample setine ait.")
+
     if source.get("technical_status") != "COMPLETED":
         raise RuntimeError("Tamamlanmamış deney scale promotion kaynağı olamaz.")
     if source.get("scientific_verdict") != request.scientific_verdict.value:
