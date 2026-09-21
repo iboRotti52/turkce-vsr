@@ -1,0 +1,328 @@
+import pytest
+
+from src.experiments.large_data_controller import (
+    EvidenceScope,
+    PromotionRequest,
+    ScaleAction,
+    ScaleExperimentPlan,
+    ScientificVerdict,
+    build_scaling_curve,
+    ordered_research_scales,
+    validate_promotion_request,
+    validate_scale_experiment_plan,
+)
+from src.experiments.tracker import ExperimentRecord, ExperimentTracker
+
+
+def _large_data_plan():
+    return {
+        "staged_subsets": {
+            "10h": ["a"],
+            "25h": ["a", "b"],
+            "50h": ["a", "b", "c"],
+            "full": ["a", "b", "c", "d"],
+        }
+    }
+
+
+def _source_record(
+    *,
+    scale="10h",
+    promotion_rule="Promote if WER improves >= 3% relative with no subgroup collapse.",
+    verdict="PASSED",
+):
+    return ExperimentRecord(
+        experiment_id="probe_arch_newfamily_10h",
+        hypothesis="A different temporal model may scale better than the current Conformer.",
+        falsification_criteria="No WER gain or worse long-utterance failures.",
+        setup={"question_id": "ARCH-LD-001"},
+        expectation="Better generalization on held-out validation.",
+        result={"wer": 0.31},
+        status=verdict,
+        candidate_version="c0.5.0",
+        data_scale=scale,
+        minimum_sufficient_scale="10h",
+        evidence_scope=EvidenceScope.LARGE_DATA_REGIME.value,
+        promotion_rule=promotion_rule,
+        estimated_gpu_hours=1.2,
+        cost_estimate_usd=0.8,
+    )
+
+
+def test_scales_follow_available_plan():
+    assert ordered_research_scales(_large_data_plan()) == (
+        "smoke",
+        "10h",
+        "25h",
+        "50h",
+        "full",
+    )
+
+
+def test_controller_constrains_cost_not_scientific_search_space():
+    # Intentionally radical scientific change: controller must not whitelist the
+    # current Conformer/CTC family. It validates only scale/cost/falsifiability metadata.
+    plan = ScaleExperimentPlan(
+        question_id="ARCH-LD-001",
+        candidate_version="c0.5.0",
+        hypothesis=(
+            "Replace the current temporal encoder/objective with a state-space + "
+            "transducer design because long-sequence failures may be temporal."
+        ),
+        requested_scale="10h",
+        minimum_sufficient_scale="10h",
+        information_gain_rationale=(
+            "10h contains enough speaker diversity and long clips to distinguish "
+            "temporal behavior before spending on 25h+."
+        ),
+        why_smaller_scale_is_insufficient=(
+            "Smoke can verify tensor/gradient correctness but cannot measure "
+            "speaker-disjoint long-sequence generalization."
+        ),
+        promotion_rule="Promote only if WER improves >= 3% relative without subgroup regression.",
+        estimated_gpu_hours=1.0,
+        estimated_cost_usd=0.7,
+    )
+    validate_scale_experiment_plan(
+        plan,
+        large_data_plan=_large_data_plan(),
+        remaining_budget_usd=10.0,
+    )
+
+
+def test_initial_scale_skip_requires_scientific_justification():
+    plan = ScaleExperimentPlan(
+        question_id="ARCH-LD-001",
+        candidate_version="c0.5.0",
+        hypothesis="Test a temporal architecture change.",
+        requested_scale="10h",
+        minimum_sufficient_scale="10h",
+        information_gain_rationale="Need held-out behavior.",
+        promotion_rule="Promote on meaningful WER gain.",
+        estimated_gpu_hours=1.0,
+        estimated_cost_usd=0.5,
+    )
+    with pytest.raises(ValueError, match="daha küçük scale"):
+        validate_scale_experiment_plan(
+            plan,
+            large_data_plan=_large_data_plan(),
+            remaining_budget_usd=10.0,
+        )
+
+
+def test_non_smoke_run_requires_predeclared_promotion_rule():
+    plan = ScaleExperimentPlan(
+        question_id="TRAIN-LD-001",
+        candidate_version="c0.5.0",
+        hypothesis="A schedule change may improve optimization.",
+        requested_scale="10h",
+        minimum_sufficient_scale="10h",
+        information_gain_rationale="10h is enough to see stable validation dynamics.",
+        why_smaller_scale_is_insufficient="Smoke cannot estimate validation dynamics.",
+        estimated_gpu_hours=0.5,
+        estimated_cost_usd=0.2,
+    )
+    with pytest.raises(ValueError, match="promotion_rule"):
+        validate_scale_experiment_plan(
+            plan,
+            large_data_plan=_large_data_plan(),
+            remaining_budget_usd=10.0,
+        )
+
+
+def test_accept_can_promote_only_with_predeclared_rule_met():
+    rule = "Promote if WER improves >= 3% relative with no subgroup collapse."
+    request = PromotionRequest(
+        question_id="ARCH-LD-001",
+        candidate_version="c0.5.0",
+        from_scale="10h",
+        to_scale="25h",
+        scientific_verdict=ScientificVerdict.ACCEPT,
+        action=ScaleAction.PROMOTE_SCALE,
+        promotion_rule=rule,
+        promotion_rule_met=True,
+        evidence_refs=("experiments/registry.jsonl#probe_arch_newfamily_10h",),
+        estimated_gpu_hours=2.0,
+        estimated_cost_usd=1.4,
+    )
+    validate_promotion_request(
+        request,
+        source_experiment=_source_record(promotion_rule=rule),
+        large_data_plan=_large_data_plan(),
+        remaining_budget_usd=8.0,
+    )
+
+
+def test_promotion_rule_cannot_be_changed_after_result():
+    source = _source_record(promotion_rule="Original predeclared rule.")
+    request = PromotionRequest(
+        question_id="ARCH-LD-001",
+        candidate_version="c0.5.0",
+        from_scale="10h",
+        to_scale="25h",
+        scientific_verdict=ScientificVerdict.ACCEPT,
+        action=ScaleAction.PROMOTE_SCALE,
+        promotion_rule="Easier rule invented after seeing result.",
+        promotion_rule_met=True,
+        evidence_refs=("registry#source",),
+        estimated_gpu_hours=2.0,
+        estimated_cost_usd=1.0,
+    )
+    with pytest.raises(RuntimeError, match="değiştirilemez"):
+        validate_promotion_request(
+            request,
+            source_experiment=source,
+            large_data_plan=_large_data_plan(),
+            remaining_budget_usd=8.0,
+        )
+
+
+def test_inconclusive_is_not_automatic_promotion():
+    source = _source_record()
+    base = dict(
+        question_id="ARCH-LD-001",
+        candidate_version="c0.5.0",
+        from_scale="10h",
+        to_scale="25h",
+        scientific_verdict=ScientificVerdict.INCONCLUSIVE,
+        action=ScaleAction.PROMOTE_SCALE,
+        promotion_rule=source.promotion_rule,
+        promotion_rule_met=False,
+        evidence_refs=("registry#source",),
+        estimated_gpu_hours=2.0,
+        estimated_cost_usd=1.0,
+    )
+    with pytest.raises(RuntimeError, match="otomatik scale promotion"):
+        validate_promotion_request(
+            PromotionRequest(**base),
+            source_experiment=source,
+            large_data_plan=_large_data_plan(),
+            remaining_budget_usd=8.0,
+        )
+
+    validate_promotion_request(
+        PromotionRequest(
+            **base,
+            scale_sensitive_ambiguity=True,
+            why_larger_scale_resolves_ambiguity=(
+                "The architecture difference is expected only after enough speaker "
+                "and sequence diversity; 10h confidence intervals overlap."
+            ),
+        ),
+        source_experiment=source,
+        large_data_plan=_large_data_plan(),
+        remaining_budget_usd=8.0,
+    )
+
+
+def test_rejected_hypothesis_cannot_be_promoted():
+    source = _source_record()
+    request = PromotionRequest(
+        question_id="ARCH-LD-001",
+        candidate_version="c0.5.0",
+        from_scale="10h",
+        to_scale="25h",
+        scientific_verdict=ScientificVerdict.REJECT,
+        action=ScaleAction.PROMOTE_SCALE,
+        promotion_rule=source.promotion_rule,
+        promotion_rule_met=False,
+        evidence_refs=("registry#source",),
+        estimated_gpu_hours=2.0,
+        estimated_cost_usd=1.0,
+    )
+    with pytest.raises(RuntimeError, match="REJECT"):
+        validate_promotion_request(
+            request,
+            source_experiment=source,
+            large_data_plan=_large_data_plan(),
+            remaining_budget_usd=8.0,
+        )
+
+
+def test_scale_skipping_requires_explicit_justification():
+    source = _source_record()
+    request = PromotionRequest(
+        question_id="ARCH-LD-001",
+        candidate_version="c0.5.0",
+        from_scale="10h",
+        to_scale="50h",
+        scientific_verdict=ScientificVerdict.ACCEPT,
+        action=ScaleAction.PROMOTE_SCALE,
+        promotion_rule=source.promotion_rule,
+        promotion_rule_met=True,
+        evidence_refs=("registry#source",),
+        estimated_gpu_hours=4.0,
+        estimated_cost_usd=2.0,
+    )
+    with pytest.raises(ValueError, match="skip_scale_justification"):
+        validate_promotion_request(
+            request,
+            source_experiment=source,
+            large_data_plan=_large_data_plan(),
+            remaining_budget_usd=8.0,
+        )
+
+
+def test_scaling_curve_is_candidate_question_and_scale_scoped():
+    records = [
+        ExperimentRecord(
+            experiment_id="e25",
+            hypothesis="h",
+            falsification_criteria="f",
+            setup={"question_id": "ARCH-LD-001"},
+            expectation="x",
+            result={"wer": 0.25},
+            status="PASSED",
+            candidate_version="c0.5.0",
+            data_scale="25h",
+            evidence_scope=EvidenceScope.LARGE_DATA_REGIME.value,
+        ),
+        ExperimentRecord(
+            experiment_id="e10",
+            hypothesis="h",
+            falsification_criteria="f",
+            setup={"question_id": "ARCH-LD-001"},
+            expectation="x",
+            result={"metrics": {"wer": 0.32}},
+            status="PASSED",
+            candidate_version="c0.5.0",
+            data_scale="10h",
+            evidence_scope=EvidenceScope.LARGE_DATA_REGIME.value,
+        ),
+        ExperimentRecord(
+            experiment_id="wrong_candidate",
+            hypothesis="h",
+            falsification_criteria="f",
+            setup={"question_id": "ARCH-LD-001"},
+            expectation="x",
+            result={"wer": 0.10},
+            status="PASSED",
+            candidate_version="c0.6.0",
+            data_scale="50h",
+        ),
+    ]
+    curve = build_scaling_curve(
+        records,
+        question_id="ARCH-LD-001",
+        candidate_version="c0.5.0",
+        metric="wer",
+        large_data_plan=_large_data_plan(),
+    )
+    assert [(point.scale, point.value) for point in curve] == [
+        ("10h", 0.32),
+        ("25h", 0.25),
+    ]
+
+
+def test_tracker_roundtrips_large_data_agentic_metadata(tmp_path):
+    tracker = ExperimentTracker(tmp_path / "registry.jsonl")
+    record = _source_record()
+    tracker.log(record)
+
+    loaded = tracker.load_all()
+    assert len(loaded) == 1
+    assert loaded[0].candidate_version == "c0.5.0"
+    assert loaded[0].data_scale == "10h"
+    assert loaded[0].minimum_sufficient_scale == "10h"
+    assert loaded[0].promotion_rule == record.promotion_rule
+    assert loaded[0].estimated_gpu_hours == pytest.approx(1.2)
