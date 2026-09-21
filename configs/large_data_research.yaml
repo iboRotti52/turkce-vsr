@@ -8,8 +8,13 @@ data:
   representation: preprocessed_mouth_clips
   raw_video_preprocessing_in_scope: false
   revision_policy: immutable_40_hex_hf_commit_required
+  speaker_identity:
+    preferred_fields: [speaker_id, speaker]
+    fallback_proxy_fields: [channel, creator, source_channel]
+    mixed_identity_fields_allowed: false
+    proxy_requires_human_audit: true
   split_policy:
-    speaker_disjoint: true
+    speaker_or_proxy_group_disjoint: true
     regenerate_from_new_manifest: true
     reuse_c0_4_split: false
     val_fraction: 0.10
