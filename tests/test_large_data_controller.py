@@ -7,6 +7,7 @@ from src.experiments.large_data_controller import (
     ScaleExperimentPlan,
     ScientificVerdict,
     build_scaling_curve,
+    complete_scale_experiment,
     ordered_research_scales,
     register_scale_experiment,
     validate_promotion_request,
@@ -30,7 +31,7 @@ def _source_record(
     *,
     scale="10h",
     promotion_rule="Promote if WER improves >= 3% relative with no subgroup collapse.",
-    verdict="PASSED",
+    scientific_verdict=ScientificVerdict.ACCEPT,
 ):
     return ExperimentRecord(
         experiment_id="probe_arch_newfamily_10h",
@@ -39,7 +40,11 @@ def _source_record(
         setup={"question_id": "ARCH-LD-001"},
         expectation="Better generalization on held-out validation.",
         result={"wer": 0.31},
-        status=verdict,
+        status={
+            ScientificVerdict.ACCEPT: "PASSED",
+            ScientificVerdict.REJECT: "FALSIFIED",
+            ScientificVerdict.INCONCLUSIVE: "INCONCLUSIVE",
+        }[scientific_verdict],
         candidate_version="c0.5.0",
         data_scale=scale,
         minimum_sufficient_scale="10h",
@@ -47,6 +52,8 @@ def _source_record(
         promotion_rule=promotion_rule,
         estimated_gpu_hours=1.2,
         cost_estimate_usd=0.8,
+        technical_status="COMPLETED",
+        scientific_verdict=scientific_verdict.value,
     )
 
 
@@ -376,3 +383,93 @@ def test_register_scale_experiment_writes_pre_result_governance(tmp_path):
     loaded = tracker.load_all()[0]
     assert loaded.promotion_rule == plan.promotion_rule
     assert loaded.status == "IN_PROGRESS"
+
+
+def test_completion_separates_technical_status_from_scientific_verdict(tmp_path):
+    tracker = ExperimentTracker(tmp_path / "registry.jsonl")
+    plan = ScaleExperimentPlan(
+        question_id="TRAIN-LD-010",
+        candidate_version="c0.5.0",
+        hypothesis="A schedule change may improve long-utterance optimization.",
+        requested_scale="10h",
+        minimum_sufficient_scale="10h",
+        falsification_criteria="No WER or long-bucket improvement.",
+        expectation="Lower long-bucket WER.",
+        information_gain_rationale="10h can expose the optimization mechanism.",
+        why_smaller_scale_is_insufficient="Smoke cannot estimate held-out WER.",
+        promotion_rule="Promote if long-bucket WER improves >= 3% with no overall regression.",
+        estimated_gpu_hours=1.0,
+        estimated_cost_usd=0.5,
+    )
+    started = register_scale_experiment(
+        plan,
+        tracker=tracker,
+        experiment_id="probe_train_ld010_10h",
+        large_data_plan=_large_data_plan(),
+        remaining_budget_usd=5.0,
+    )
+    assert started.technical_status == "IN_PROGRESS"
+    assert started.scientific_verdict is None
+
+    completed = complete_scale_experiment(
+        started,
+        tracker=tracker,
+        result={"wer": 0.33, "long_wer": 0.41},
+        scientific_verdict=ScientificVerdict.INCONCLUSIVE,
+        actual_gpu_hours=0.9,
+        actual_cost_usd=0.42,
+        surprise="Overall stable; long bucket confidence interval overlaps baseline.",
+        updated_belief="The schedule may be scale-sensitive but evidence is not decisive.",
+        next_step="Inspect long-bucket failures before considering promotion.",
+        scale_action=ScaleAction.STOP,
+    )
+    assert completed.technical_status == "COMPLETED"
+    assert completed.scientific_verdict == "INCONCLUSIVE"
+    assert completed.status == "INCONCLUSIVE"
+    assert completed.actual_gpu_hours == pytest.approx(0.9)
+    assert completed.cost_usd == pytest.approx(0.42)
+
+
+def test_in_progress_experiment_cannot_be_promoted(tmp_path):
+    tracker = ExperimentTracker(tmp_path / "registry.jsonl")
+    plan = ScaleExperimentPlan(
+        question_id="ARCH-LD-099",
+        candidate_version="c0.5.0",
+        hypothesis="Test an alternative architecture.",
+        requested_scale="10h",
+        minimum_sufficient_scale="10h",
+        falsification_criteria="No WER improvement.",
+        expectation="Lower WER.",
+        information_gain_rationale="10h is sufficient for first comparison.",
+        why_smaller_scale_is_insufficient="Smoke has no reliable generalization metric.",
+        promotion_rule="Promote if WER improves >= 3%.",
+        estimated_gpu_hours=1.0,
+        estimated_cost_usd=0.5,
+    )
+    started = register_scale_experiment(
+        plan,
+        tracker=tracker,
+        experiment_id="probe_arch_ld099_10h",
+        large_data_plan=_large_data_plan(),
+        remaining_budget_usd=5.0,
+    )
+    request = PromotionRequest(
+        question_id="ARCH-LD-099",
+        candidate_version="c0.5.0",
+        from_scale="10h",
+        to_scale="25h",
+        scientific_verdict=ScientificVerdict.ACCEPT,
+        action=ScaleAction.PROMOTE_SCALE,
+        promotion_rule=plan.promotion_rule,
+        promotion_rule_met=True,
+        evidence_refs=("registry#probe_arch_ld099_10h",),
+        estimated_gpu_hours=2.0,
+        estimated_cost_usd=1.0,
+    )
+    with pytest.raises(RuntimeError, match="Tamamlanmamış"):
+        validate_promotion_request(
+            request,
+            source_experiment=started,
+            large_data_plan=_large_data_plan(),
+            remaining_budget_usd=4.0,
+        )
