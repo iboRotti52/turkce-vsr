@@ -394,7 +394,20 @@ Promotion kuralları:
     full-data stage yalnız bilimsel soru bunu gerçekten gerektiriyorsa kullanılabilir;
     production/final full training yine readiness kapısına tabidir.
 
-Programatik doğrulama için `src.experiments.large_data_controller` kullan.
+Düşük seviyeli programatik doğrulama `src.experiments.large_data_controller` içindedir.
+Normal agentic kullanımda bunun üstündeki tek giriş noktası
+`python -m src.experiments.large_data_workflow` olmalıdır.
+
+Her yeni large-data araştırma adımında önce:
+
+```bash
+python -m src.experiments.large_data_workflow --budget-usd 25 status
+```
+
+ile registry, active run, dataset revision, scale listesi ve budgetı uzlaştır. Yeni bağımsız
+scientific run için `register --spec ...`, bilimsel completion için `complete --spec ...`,
+teknik failure için `fail --spec ...`, scale büyütmek için `promote --spec ...` kullan.
+Workflow training/GPU launch etmez; yalnız governance state'ini mühürler.
 
 ### Scaling behaviour resmi kanıt kaynağıdır
 
