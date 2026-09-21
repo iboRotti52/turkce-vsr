@@ -92,7 +92,9 @@ def _stage_hours(stage: str) -> float:
         return float("inf")
     if stage.endswith("h"):
         try:
-            return float(stage[:-1])
+            hours = float(stage[:-1])
+            if hours > 0:
+                return hours
         except ValueError:
             pass
     raise ValueError(f"Bilinmeyen araştırma ölçeği: {stage}")
@@ -135,7 +137,7 @@ def _find_registry_record(tracker: "ExperimentTracker", experiment_id: str) -> E
 
     if not isinstance(tracker, ExperimentTracker):
         raise TypeError("tracker ExperimentTracker olmalıdır.")
-    matches = [r for r in tracker.load_all() if r.experiment_id == experiment_id]
+    matches = [r for r in tracker.load_all(strict=True) if r.experiment_id == experiment_id]
     if not matches:
         raise FileNotFoundError(f"Registry experiment bulunamadı: {experiment_id}")
     if len(matches) != 1:
@@ -212,7 +214,22 @@ def _require_large_data_identity(plan: Mapping[str, Any], scale: str) -> None:
         return
     _require_hex(plan.get("dataset_revision"), 40, "dataset_revision")
     _require_hex(plan.get("split_map_sha256"), 64, "split_map_sha256")
+    _require_hex(plan.get("plan_sha256"), 64, "plan_sha256")
     _stage_sample_hash(plan, scale)
+
+
+def _require_execution_provenance(setup: Mapping[str, Any]) -> None:
+    _require_hex(setup.get("code_revision"), 40, "code_revision")
+    _require_hex(
+        setup.get("candidate_recipe_sha256"),
+        64,
+        "candidate_recipe_sha256",
+    )
+    _require_nonempty("initializer_id", str(setup.get("initializer_id") or ""))
+    _require_hex(setup.get("initializer_sha256"), 64, "initializer_sha256")
+    seed = setup.get("seed")
+    if not isinstance(seed, int) or isinstance(seed, bool):
+        raise ValueError("seed integer olmalıdır.")
 
 
 def validate_scale_experiment_plan(
@@ -301,7 +318,7 @@ def register_scale_experiment(
     if not isinstance(tracker, ExperimentTracker):
         raise TypeError("tracker ExperimentTracker olmalıdır.")
     _require_nonempty("experiment_id", experiment_id)
-    if any(r.experiment_id == experiment_id for r in tracker.load_all()):
+    if any(r.experiment_id == experiment_id for r in tracker.load_all(strict=True)):
         raise RuntimeError(
             f"experiment_id zaten registry'de mevcut; pre-result metadata overwrite edilemez: {experiment_id}"
         )
@@ -319,6 +336,8 @@ def register_scale_experiment(
     setup_payload["why_smaller_scale_is_insufficient"] = (
         experiment.why_smaller_scale_is_insufficient
     )
+    if experiment.requested_scale != VIRTUAL_SMOKE_SCALE:
+        _require_execution_provenance(setup_payload)
 
     stage_hash = _stage_sample_hash(large_data_plan, experiment.requested_scale)
     if stage_hash:
@@ -425,6 +444,40 @@ def complete_scale_experiment(
     return completed
 
 
+def fail_scale_experiment(
+    experiment_id: str,
+    *,
+    tracker: "ExperimentTracker",
+    error: str,
+    actual_gpu_hours: float,
+    actual_cost_usd: float,
+) -> ExperimentRecord:
+    """Close a pre-registered run that failed technically without inventing a verdict."""
+    _require_nonempty("experiment_id", experiment_id)
+    _require_nonempty("error", error)
+    if actual_gpu_hours < 0 or actual_cost_usd < 0:
+        raise ValueError("Gerçekleşen GPU-hours/USD negatif olamaz.")
+    record = _find_registry_record(tracker, experiment_id)
+    require_pre_result_contract_intact(record)
+    if record.technical_status != "IN_PROGRESS":
+        raise RuntimeError(
+            f"Yalnız IN_PROGRESS deney ERROR olarak kapatılabilir; mevcut={record.technical_status}"
+        )
+
+    failed = replace(
+        record,
+        result={"error": error},
+        status="ERROR",
+        cost_usd=actual_cost_usd,
+        actual_gpu_hours=actual_gpu_hours,
+        technical_status="ERROR",
+        scientific_verdict=None,
+        scale_action=ScaleAction.STOP.value,
+    )
+    tracker.log(failed)
+    return failed
+
+
 def register_promoted_experiment(
     request: PromotionRequest,
     *,
@@ -440,7 +493,7 @@ def register_promoted_experiment(
     if not isinstance(tracker, ExperimentTracker):
         raise TypeError("tracker ExperimentTracker olmalıdır.")
     _require_nonempty("target_experiment_id", target_experiment_id)
-    if any(r.experiment_id == target_experiment_id for r in tracker.load_all()):
+    if any(r.experiment_id == target_experiment_id for r in tracker.load_all(strict=True)):
         raise RuntimeError(f"target experiment_id zaten mevcut: {target_experiment_id}")
 
     validate_promotion_request(
@@ -566,6 +619,12 @@ def validate_promotion_request(
     expected_source_stage_hash = _stage_sample_hash(
         large_data_plan, request.from_scale
     )
+    _require_execution_provenance(source_setup)
+    expected_plan_hash = _require_hex(
+        large_data_plan.get("plan_sha256"), 64, "plan_sha256"
+    )
+    if source_setup.get("large_data_plan_sha256") != expected_plan_hash:
+        raise RuntimeError("Promotion source farklı large-data plan'a ait.")
     if source_setup.get("dataset_revision") != expected_dataset_revision:
         raise RuntimeError("Promotion source farklı HF dataset revision'a ait.")
     if source_setup.get("split_map_sha256") != expected_split_hash:
