@@ -205,10 +205,14 @@ def reconcile_workflow(
     for record in active:
         require_pre_result_contract_intact(record)
 
+    # Historical c0.4 records predate technical_status but already carry
+    # real cost_usd. Any non-active record with actual cost must count against
+    # the same research budget; otherwise the large-data phase would "forget"
+    # earlier spend.
     spent_actual = sum(
         float(record.cost_usd or 0.0)
         for record in records
-        if record.technical_status in {"COMPLETED", "ERROR"}
+        if record.technical_status != "IN_PROGRESS" and record.cost_usd is not None
     )
     reserved = sum(float(record.cost_estimate_usd or 0.0) for record in active)
     remaining = total_budget_usd - spent_actual - reserved
