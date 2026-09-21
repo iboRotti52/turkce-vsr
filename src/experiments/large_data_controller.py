@@ -49,6 +49,9 @@ class ScaleExperimentPlan:
     information_gain_rationale: str
     why_smaller_scale_is_insufficient: str = ""
     promotion_rule: str = ""
+    falsification_criteria: str = ""
+    expectation: str = ""
+    evidence_scope: str = EvidenceScope.LARGE_DATA_REGIME.value
     estimated_gpu_hours: float = 0.0
     estimated_cost_usd: float = 0.0
 
@@ -136,6 +139,8 @@ def validate_scale_experiment_plan(
         ("candidate_version", experiment.candidate_version),
         ("hypothesis", experiment.hypothesis),
         ("information_gain_rationale", experiment.information_gain_rationale),
+        ("falsification_criteria", experiment.falsification_criteria),
+        ("expectation", experiment.expectation),
         ("requested_scale", experiment.requested_scale),
         ("minimum_sufficient_scale", experiment.minimum_sufficient_scale),
     ):
@@ -181,6 +186,70 @@ def validate_scale_experiment_plan(
         raise ValueError(
             "Large-data araştırma koşusu promotion_rule olmadan başlatılamaz."
         )
+    try:
+        EvidenceScope(experiment.evidence_scope)
+    except ValueError:
+        raise ValueError(f"Bilinmeyen evidence_scope: {experiment.evidence_scope}")
+
+
+def register_scale_experiment(
+    experiment: ScaleExperimentPlan,
+    *,
+    tracker: "ExperimentTracker",
+    experiment_id: str,
+    large_data_plan: Mapping[str, Any],
+    remaining_budget_usd: float,
+    setup: Optional[Mapping[str, Any]] = None,
+) -> ExperimentRecord:
+    """Validate and persist an IN_PROGRESS large-data experiment before execution."""
+    from src.experiments.tracker import ExperimentTracker
+
+    if not isinstance(tracker, ExperimentTracker):
+        raise TypeError("tracker ExperimentTracker olmalıdır.")
+    _require_nonempty("experiment_id", experiment_id)
+    validate_scale_experiment_plan(
+        experiment,
+        large_data_plan=large_data_plan,
+        remaining_budget_usd=remaining_budget_usd,
+    )
+
+    setup_payload: Dict[str, Any] = dict(setup or {})
+    setup_payload["question_id"] = experiment.question_id
+    setup_payload["data_scale"] = experiment.requested_scale
+    setup_payload["minimum_sufficient_scale"] = experiment.minimum_sufficient_scale
+    setup_payload["information_gain_rationale"] = experiment.information_gain_rationale
+    setup_payload["why_smaller_scale_is_insufficient"] = (
+        experiment.why_smaller_scale_is_insufficient
+    )
+
+    stage_summary = (large_data_plan.get("staged_summary") or {}).get(
+        experiment.requested_scale, {}
+    )
+    if stage_summary.get("sample_ids_sha256"):
+        setup_payload["train_subset_sha256"] = stage_summary["sample_ids_sha256"]
+    if large_data_plan.get("dataset_revision"):
+        setup_payload["dataset_revision"] = large_data_plan["dataset_revision"]
+    if large_data_plan.get("split_map_sha256"):
+        setup_payload["split_map_sha256"] = large_data_plan["split_map_sha256"]
+
+    record = ExperimentRecord(
+        experiment_id=experiment_id,
+        hypothesis=experiment.hypothesis,
+        falsification_criteria=experiment.falsification_criteria,
+        setup=setup_payload,
+        expectation=experiment.expectation,
+        status="IN_PROGRESS",
+        candidate_version=experiment.candidate_version,
+        data_scale=experiment.requested_scale,
+        minimum_sufficient_scale=experiment.minimum_sufficient_scale,
+        evidence_scope=experiment.evidence_scope,
+        promotion_rule=experiment.promotion_rule or None,
+        scale_action=ScaleAction.STOP.value,
+        estimated_gpu_hours=experiment.estimated_gpu_hours,
+        cost_estimate_usd=experiment.estimated_cost_usd,
+    )
+    tracker.log(record)
+    return record
 
 
 def _next_scale(scales: Sequence[str], current: str) -> Optional[str]:
