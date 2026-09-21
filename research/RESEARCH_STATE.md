@@ -63,3 +63,24 @@ D20, D21, D22 ve D23 kararları kapsamında düşük-veri rejimindeki mimari, ve
 
 Full training başlatılmamıştır. Test kümesi kesinlikle araştırmaya kapalı tutulmaktadır.
 
+
+
+## Large-data agentic continuation contract
+
+Bu bölüm `c0.4.0` small-data sonucunu değiştirmez. Yeni HF snapshot audit edilip
+`c0.5.0 / RESEARCHING` açıldığında araştırma motoru aynı kalır; yalnız etrafına
+cost-aware scale controller eklenir.
+
+- `c0.4.0` mimarisi başlangıç prior'ıdır, kalıcı mimari zorunluluğu değildir.
+- `c0.5.x/c0.6.x` sürümleri architecture lineage değil, güncel en iyi bilimsel
+  inancın snapshot'larıdır.
+- Yeni araştırma sorusu; geçmiş D kararları, başarısız/inconclusive deneyler,
+  raw predictions, failure clusters, scaling curves, subgroup davranışı ve
+  literatürü birlikte kullanarak seçilir.
+- `src.experiments.large_data_controller` yalnız minimum sufficient scale,
+  promotion, GPU-hours/USD ve bütçeyi yönetir; mimari/objective arama alanını
+  daraltmaz.
+- Scaling behaviour `research/SCALING_ANALYSIS.md` içinde kalıcı kanıttır.
+- Yeni önemli bulgular evidence scope + revalidation trigger ile kaydedilir.
+
+Large-data dataset planı audit edilmeden bu contract aktif eğitim yetkisi vermez.
