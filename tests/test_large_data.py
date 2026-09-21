@@ -9,7 +9,11 @@ from src.data.large_data import (
     build_speaker_diverse_training_stages,
     validate_speaker_disjoint_split,
 )
-from src.data.large_data_loader import build_large_data_loader, set_large_data_loader_epoch
+from src.data.large_data_loader import (
+    StageDatasetView,
+    build_large_data_loader,
+    set_large_data_loader_epoch,
+)
 from src.data.dataset import SequenceBucketSampler
 
 
@@ -270,3 +274,33 @@ def test_large_data_plan_rejects_duplicate_sample_ids_and_missing_duration():
             dataset_id="avsr-tr-ekip/avsr-tr-dataset",
             dataset_revision="e" * 40,
         )
+
+
+def test_stage_dataset_view_binds_exact_planned_samples():
+    class BaseDataset:
+        cache_in_ram = False
+
+        def __init__(self):
+            self.samples = [
+                {"video_id": "video-a", "seg_id": "000001", "duration": 2.0},
+                {"video_id": "video-b", "seg_id": "000001", "duration": 5.0},
+                {"video_id": "video-c", "seg_id": "000001", "duration": 9.0},
+            ]
+
+        def __len__(self):
+            return len(self.samples)
+
+        def __getitem__(self, idx):
+            return {"idx": idx}
+
+    view = StageDatasetView(
+        BaseDataset(),
+        ["video-c/000001", "video-a/000001"],
+    )
+    assert len(view) == 2
+    assert [sample["video_id"] for sample in view.samples] == ["video-c", "video-a"]
+    assert view[0]["idx"] == 2
+    assert [sample["duration"] for sample in view.samples] == [9.0, 2.0]
+
+    with pytest.raises(RuntimeError, match="bulunmayan"):
+        StageDatasetView(BaseDataset(), ["missing/000001"])
