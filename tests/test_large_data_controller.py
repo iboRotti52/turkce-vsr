@@ -8,6 +8,7 @@ from src.experiments.large_data_controller import (
     ScientificVerdict,
     build_scaling_curve,
     ordered_research_scales,
+    register_scale_experiment,
     validate_promotion_request,
     validate_scale_experiment_plan,
 )
@@ -71,6 +72,8 @@ def test_controller_constrains_cost_not_scientific_search_space():
         ),
         requested_scale="10h",
         minimum_sufficient_scale="10h",
+        falsification_criteria="Predeclared falsification condition.",
+        expectation="Predeclared expected observable change.",
         information_gain_rationale=(
             "10h contains enough speaker diversity and long clips to distinguish "
             "temporal behavior before spending on 25h+."
@@ -97,6 +100,8 @@ def test_initial_scale_skip_requires_scientific_justification():
         hypothesis="Test a temporal architecture change.",
         requested_scale="10h",
         minimum_sufficient_scale="10h",
+        falsification_criteria="Predeclared falsification condition.",
+        expectation="Predeclared expected observable change.",
         information_gain_rationale="Need held-out behavior.",
         promotion_rule="Promote on meaningful WER gain.",
         estimated_gpu_hours=1.0,
@@ -117,6 +122,8 @@ def test_non_smoke_run_requires_predeclared_promotion_rule():
         hypothesis="A schedule change may improve optimization.",
         requested_scale="10h",
         minimum_sufficient_scale="10h",
+        falsification_criteria="Predeclared falsification condition.",
+        expectation="Predeclared expected observable change.",
         information_gain_rationale="10h is enough to see stable validation dynamics.",
         why_smaller_scale_is_insufficient="Smoke cannot estimate validation dynamics.",
         estimated_gpu_hours=0.5,
@@ -326,3 +333,46 @@ def test_tracker_roundtrips_large_data_agentic_metadata(tmp_path):
     assert loaded[0].minimum_sufficient_scale == "10h"
     assert loaded[0].promotion_rule == record.promotion_rule
     assert loaded[0].estimated_gpu_hours == pytest.approx(1.2)
+
+
+def test_register_scale_experiment_writes_pre_result_governance(tmp_path):
+    tracker = ExperimentTracker(tmp_path / "registry.jsonl")
+    plan = ScaleExperimentPlan(
+        question_id="ARCH-LD-002",
+        candidate_version="c0.5.0",
+        hypothesis="A different visual frontend may reduce cross-speaker failures.",
+        requested_scale="10h",
+        minimum_sufficient_scale="10h",
+        falsification_criteria="No validation or subgroup improvement versus control.",
+        expectation="Lower WER on held-out proxy groups without long-clip regression.",
+        information_gain_rationale="10h is enough to expose cross-speaker behavior.",
+        why_smaller_scale_is_insufficient="Smoke cannot measure held-out generalization.",
+        promotion_rule="Promote if WER improves >= 2% and worst-group WER does not regress.",
+        evidence_scope=EvidenceScope.LARGE_DATA_REGIME.value,
+        estimated_gpu_hours=1.5,
+        estimated_cost_usd=0.9,
+    )
+    large_plan = {
+        **_large_data_plan(),
+        "dataset_revision": "a" * 40,
+        "split_map_sha256": "b" * 64,
+        "staged_summary": {"10h": {"sample_ids_sha256": "c" * 64}},
+    }
+
+    record = register_scale_experiment(
+        plan,
+        tracker=tracker,
+        experiment_id="probe_arch_ld002_10h",
+        large_data_plan=large_plan,
+        remaining_budget_usd=5.0,
+        setup={"baseline_experiment_id": "baseline_c05_10h"},
+    )
+
+    assert record.status == "IN_PROGRESS"
+    assert record.data_scale == "10h"
+    assert record.promotion_rule == plan.promotion_rule
+    assert record.setup["train_subset_sha256"] == "c" * 64
+    assert record.setup["dataset_revision"] == "a" * 40
+    loaded = tracker.load_all()[0]
+    assert loaded.promotion_rule == plan.promotion_rule
+    assert loaded.status == "IN_PROGRESS"
