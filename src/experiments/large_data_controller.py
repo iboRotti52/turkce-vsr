@@ -99,7 +99,13 @@ def _stage_hours(stage: str) -> float:
 def ordered_research_scales(plan: Mapping[str, Any]) -> Tuple[str, ...]:
     """Return smoke + actual deterministic stages from a verified data plan."""
     stages = list((plan.get("staged_subsets") or {}).keys())
+    unknown = [s for s in stages if s != "full" and not s.endswith("h")]
+    if unknown:
+        raise ValueError(f"Bilinmeyen large-data stage isimleri: {unknown}")
     numeric = sorted((s for s in stages if s.endswith("h")), key=_stage_hours)
+    # Force numeric parsing now so malformed values like 'manyh' fail closed.
+    for stage in numeric:
+        _stage_hours(stage)
     ordered: List[str] = [VIRTUAL_SMOKE_SCALE, *numeric]
     if "full" in stages:
         ordered.append("full")
@@ -120,6 +126,19 @@ def _require_nonnegative_cost(gpu_hours: float, cost_usd: float) -> None:
         raise ValueError("estimated_gpu_hours negatif olamaz.")
     if cost_usd < 0:
         raise ValueError("estimated_cost_usd negatif olamaz.")
+
+
+def _find_registry_record(tracker: "ExperimentTracker", experiment_id: str) -> ExperimentRecord:
+    from src.experiments.tracker import ExperimentTracker
+
+    if not isinstance(tracker, ExperimentTracker):
+        raise TypeError("tracker ExperimentTracker olmalıdır.")
+    matches = [r for r in tracker.load_all() if r.experiment_id == experiment_id]
+    if not matches:
+        raise FileNotFoundError(f"Registry experiment bulunamadı: {experiment_id}")
+    if len(matches) != 1:
+        raise RuntimeError(f"Registry duplicate experiment_id içeriyor: {experiment_id}")
+    return matches[0]
 
 
 def validate_scale_experiment_plan(
@@ -207,6 +226,10 @@ def register_scale_experiment(
     if not isinstance(tracker, ExperimentTracker):
         raise TypeError("tracker ExperimentTracker olmalıdır.")
     _require_nonempty("experiment_id", experiment_id)
+    if any(r.experiment_id == experiment_id for r in tracker.load_all()):
+        raise RuntimeError(
+            f"experiment_id zaten registry'de mevcut; pre-result metadata overwrite edilemez: {experiment_id}"
+        )
     validate_scale_experiment_plan(
         experiment,
         large_data_plan=large_data_plan,
@@ -254,7 +277,7 @@ def register_scale_experiment(
 
 
 def complete_scale_experiment(
-    record: ExperimentRecord,
+    experiment_id: str,
     *,
     tracker: "ExperimentTracker",
     result: Mapping[str, Any],
@@ -271,9 +294,11 @@ def complete_scale_experiment(
 
     if not isinstance(tracker, ExperimentTracker):
         raise TypeError("tracker ExperimentTracker olmalıdır.")
-    if record.technical_status not in {None, "IN_PROGRESS"}:
+    _require_nonempty("experiment_id", experiment_id)
+    record = _find_registry_record(tracker, experiment_id)
+    if record.technical_status != "IN_PROGRESS":
         raise RuntimeError(
-            f"Deney zaten terminal technical_status taşıyor: {record.technical_status}"
+            f"Yalnız pre-registered IN_PROGRESS deney tamamlanabilir; mevcut={record.technical_status}"
         )
     if actual_gpu_hours < 0 or actual_cost_usd < 0:
         raise ValueError("Gerçekleşen GPU-hours/USD negatif olamaz.")
@@ -327,7 +352,8 @@ def _next_scale(scales: Sequence[str], current: str) -> Optional[str]:
 def validate_promotion_request(
     request: PromotionRequest,
     *,
-    source_experiment: ExperimentRecord,
+    tracker: "ExperimentTracker",
+    source_experiment_id: str,
     large_data_plan: Mapping[str, Any],
     remaining_budget_usd: float,
 ) -> None:
@@ -345,6 +371,7 @@ def validate_promotion_request(
     ):
         _require_nonempty(label, value)
 
+    source_experiment = _find_registry_record(tracker, source_experiment_id)
     source = source_experiment.to_dict()
     source_setup = source.get("setup") or {}
     if source_setup.get("question_id") != request.question_id:
@@ -366,6 +393,8 @@ def validate_promotion_request(
         raise RuntimeError("Promotion rule sonuç görüldükten sonra değiştirilemez.")
 
     _require_nonnegative_cost(request.estimated_gpu_hours, request.estimated_cost_usd)
+    if remaining_budget_usd < 0:
+        raise ValueError("remaining_budget_usd negatif olamaz.")
     if request.estimated_cost_usd > remaining_budget_usd:
         raise RuntimeError(
             f"Promotion bütçeyi aşıyor: estimate={request.estimated_cost_usd:.2f} USD, "
@@ -439,6 +468,7 @@ def build_scaling_curve(
     *,
     question_id: str,
     candidate_version: str,
+    dataset_revision: str,
     metric: str,
     large_data_plan: Mapping[str, Any],
 ) -> Tuple[ScalingPoint, ...]:
@@ -455,6 +485,10 @@ def build_scaling_curve(
         if setup.get("question_id") != question_id:
             continue
         if data.get("candidate_version") != candidate_version:
+            continue
+        if setup.get("dataset_revision") != dataset_revision:
+            continue
+        if data.get("technical_status") != "COMPLETED":
             continue
         scale = data.get("data_scale")
         if scale not in scales:
