@@ -239,8 +239,11 @@ historical frozen evidence olarak korunur; yeni dataset geldiğinde önce
 
 - Hugging Face datasetini `main`/latest ile sabitleme. Araştırma için immutable
   40-hex dataset commit revision zorunludur.
-- Yeni accepted manifestten speaker-disjoint train/val/test splitini sıfırdan üret;
-  c0.4.0 split haritasını yeni konuşmacılara genişletme.
+- Yeni accepted manifestten kimlik-grubu ayrık train/val/test splitini sıfırdan üret;
+  c0.4.0 split haritasını yeni konuşmacılara genişletme. `speaker_id`/`speaker`
+  alanı varsa bunu gerçek konuşmacı kimliği olarak kullan. Yalnız `channel`/`creator`
+  varsa bunu **speaker proxy** olarak raporla; aynı kanalda birden fazla insan bulunup
+  bulunmadığını audit etmeden "kesin speaker-disjoint" iddiası yapma.
 - Test splitini research/model selection sırasında indirme, ölçme veya kararlara
   geri besleme; candidate dondurulana kadar karantinada tut.
 - Her hipotezi doğrudan full 50–100 saatte koşma. Nested, speaker-diverse
