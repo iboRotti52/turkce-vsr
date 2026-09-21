@@ -11,6 +11,7 @@ from dataclasses import dataclass, replace
 from enum import Enum
 import hashlib
 import json
+import math
 import pathlib
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
@@ -93,7 +94,7 @@ def _stage_hours(stage: str) -> float:
     if stage.endswith("h"):
         try:
             hours = float(stage[:-1])
-            if hours > 0:
+            if math.isfinite(hours) and hours > 0:
                 return hours
         except ValueError:
             pass
@@ -125,11 +126,32 @@ def _require_nonempty(label: str, value: str) -> None:
         raise ValueError(f"{label} boş olamaz.")
 
 
+def _require_finite_nonnegative(value: Any, label: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"{label} finite non-negative sayı olmalıdır.")
+    numeric = float(value)
+    if not math.isfinite(numeric) or numeric < 0:
+        raise ValueError(f"{label} finite non-negative sayı olmalıdır.")
+    return numeric
+
+
 def _require_nonnegative_cost(gpu_hours: float, cost_usd: float) -> None:
-    if gpu_hours < 0:
-        raise ValueError("estimated_gpu_hours negatif olamaz.")
-    if cost_usd < 0:
-        raise ValueError("estimated_cost_usd negatif olamaz.")
+    _require_finite_nonnegative(gpu_hours, "estimated_gpu_hours")
+    _require_finite_nonnegative(cost_usd, "estimated_cost_usd")
+
+
+def _normalize_verdict(value: Any) -> ScientificVerdict:
+    try:
+        return ScientificVerdict(value)
+    except (TypeError, ValueError):
+        raise ValueError(f"Bilinmeyen scientific verdict: {value!r}")
+
+
+def _normalize_scale_action(value: Any) -> ScaleAction:
+    try:
+        return ScaleAction(value)
+    except (TypeError, ValueError):
+        raise ValueError(f"Bilinmeyen scale action: {value!r}")
 
 
 def _find_registry_record(tracker: "ExperimentTracker", experiment_id: str) -> ExperimentRecord:
@@ -260,8 +282,9 @@ def validate_scale_experiment_plan(
         experiment.estimated_gpu_hours,
         experiment.estimated_cost_usd,
     )
-    if remaining_budget_usd < 0:
-        raise ValueError("remaining_budget_usd negatif olamaz.")
+    remaining_budget_usd = _require_finite_nonnegative(
+        remaining_budget_usd, "remaining_budget_usd"
+    )
     if experiment.estimated_cost_usd > remaining_budget_usd:
         raise RuntimeError(
             f"Deney bütçeyi aşıyor: estimate={experiment.estimated_cost_usd:.2f} USD, "
@@ -396,13 +419,19 @@ def complete_scale_experiment(
         raise RuntimeError(
             f"Yalnız pre-registered IN_PROGRESS deney tamamlanabilir; mevcut={record.technical_status}"
         )
+    scientific_verdict = _normalize_verdict(scientific_verdict)
+    scale_action = _normalize_scale_action(scale_action)
     if scale_action == ScaleAction.PROMOTE_SCALE:
         raise ValueError(
             "PROMOTE_SCALE complete_scale_experiment içinde doğrudan yazılamaz; "
             "register_promoted_experiment ile governance doğrulaması gerekir."
         )
-    if actual_gpu_hours < 0 or actual_cost_usd < 0:
-        raise ValueError("Gerçekleşen GPU-hours/USD negatif olamaz.")
+    actual_gpu_hours = _require_finite_nonnegative(
+        actual_gpu_hours, "actual_gpu_hours"
+    )
+    actual_cost_usd = _require_finite_nonnegative(
+        actual_cost_usd, "actual_cost_usd"
+    )
     if not isinstance(result, Mapping):
         raise TypeError("result mapping olmalıdır.")
 
@@ -455,8 +484,12 @@ def fail_scale_experiment(
     """Close a pre-registered run that failed technically without inventing a verdict."""
     _require_nonempty("experiment_id", experiment_id)
     _require_nonempty("error", error)
-    if actual_gpu_hours < 0 or actual_cost_usd < 0:
-        raise ValueError("Gerçekleşen GPU-hours/USD negatif olamaz.")
+    actual_gpu_hours = _require_finite_nonnegative(
+        actual_gpu_hours, "actual_gpu_hours"
+    )
+    actual_cost_usd = _require_finite_nonnegative(
+        actual_cost_usd, "actual_cost_usd"
+    )
     record = _find_registry_record(tracker, experiment_id)
     require_pre_result_contract_intact(record)
     if record.technical_status != "IN_PROGRESS":
@@ -595,6 +628,8 @@ def validate_promotion_request(
         ("promotion_rule", request.promotion_rule),
     ):
         _require_nonempty(label, value)
+    scientific_verdict = _normalize_verdict(request.scientific_verdict)
+    action = _normalize_scale_action(request.action)
 
     source_experiment = _find_registry_record(tracker, source_experiment_id)
     require_pre_result_contract_intact(source_experiment)
@@ -636,7 +671,7 @@ def validate_promotion_request(
 
     if source.get("technical_status") != "COMPLETED":
         raise RuntimeError("Tamamlanmamış deney scale promotion kaynağı olamaz.")
-    if source.get("scientific_verdict") != request.scientific_verdict.value:
+    if source.get("scientific_verdict") != scientific_verdict.value:
         raise RuntimeError(
             "Promotion request scientific verdict source registry kaydıyla uyuşmuyor."
         )
@@ -647,14 +682,15 @@ def validate_promotion_request(
         raise RuntimeError("Promotion rule sonuç görüldükten sonra değiştirilemez.")
 
     _require_nonnegative_cost(request.estimated_gpu_hours, request.estimated_cost_usd)
-    if remaining_budget_usd < 0:
-        raise ValueError("remaining_budget_usd negatif olamaz.")
+    remaining_budget_usd = _require_finite_nonnegative(
+        remaining_budget_usd, "remaining_budget_usd"
+    )
     if request.estimated_cost_usd > remaining_budget_usd:
         raise RuntimeError(
             f"Promotion bütçeyi aşıyor: estimate={request.estimated_cost_usd:.2f} USD, "
             f"remaining={remaining_budget_usd:.2f} USD"
         )
-    if request.action != ScaleAction.PROMOTE_SCALE:
+    if action != ScaleAction.PROMOTE_SCALE:
         raise ValueError("validate_promotion_request yalnız PROMOTE_SCALE için kullanılır.")
     if not request.evidence_refs:
         raise ValueError("Scale promotion en az bir kanıt referansı gerektirir.")
@@ -674,13 +710,13 @@ def validate_promotion_request(
             "skip_scale_justification zorunludur."
         )
 
-    if request.scientific_verdict == ScientificVerdict.REJECT:
+    if scientific_verdict == ScientificVerdict.REJECT:
         raise RuntimeError(
             "REJECT edilen aynı hipotez daha pahalı scale'e promote edilemez; "
             "yeni mekanizma/hipotez gerekiyorsa yeni araştırma sorusu aç."
         )
 
-    if request.scientific_verdict == ScientificVerdict.ACCEPT:
+    if scientific_verdict == ScientificVerdict.ACCEPT:
         if not request.promotion_rule_met:
             raise RuntimeError(
                 "ACCEPT sonucu daha pahalı scale'e ancak önceden yazılmış promotion "
@@ -690,7 +726,7 @@ def validate_promotion_request(
 
     # INCONCLUSIVE is not an automatic excuse to spend more. It is allowed only
     # when scale itself is the identified source of ambiguity.
-    if request.scientific_verdict == ScientificVerdict.INCONCLUSIVE:
+    if scientific_verdict == ScientificVerdict.INCONCLUSIVE:
         if not request.scale_sensitive_ambiguity:
             raise RuntimeError(
                 "INCONCLUSIVE otomatik scale promotion gerekçesi değildir."
@@ -702,7 +738,7 @@ def validate_promotion_request(
             )
         return
 
-    raise ValueError(f"Desteklenmeyen scientific verdict: {request.scientific_verdict}")
+    raise ValueError(f"Desteklenmeyen scientific verdict: {scientific_verdict}")
 
 
 def _extract_metric(result: Mapping[str, Any], metric: str) -> Optional[float]:
