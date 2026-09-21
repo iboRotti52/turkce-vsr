@@ -54,7 +54,14 @@ class HFDatasetDownloader:
                 )
             self.revision = normalized
         self.target_dir = pathlib.Path(target_dir) if target_dir else DEFAULT_TARGET_DIR
-        self.split_map_path = pathlib.Path(split_map_path) if split_map_path else DEFAULT_SPLIT_MAP
+        # A pinned large-data snapshot must never silently inherit the historical
+        # c0.4.0 split map. Research callers must pass the generated large-data map.
+        if split_map_path is not None:
+            self.split_map_path: Optional[pathlib.Path] = pathlib.Path(split_map_path)
+        elif self.revision:
+            self.split_map_path = None
+        else:
+            self.split_map_path = DEFAULT_SPLIT_MAP
         self.hf_token = hf_token or os.environ.get("HF_TOKEN") or None
         self.max_local_gb = max_local_gb
 
@@ -72,6 +79,12 @@ class HFDatasetDownloader:
     def _get_split_map(self) -> Dict[str, Any]:
         if self._split_map is not None:
             return self._split_map
+
+        if self.split_map_path is None:
+            raise FileNotFoundError(
+                "Pinned large-data revision için split map açıkça verilmelidir; "
+                "önce src.data.prepare_large_data ile split_map_large_data.json üretin."
+            )
 
         if self.split_map_path.exists():
             with open(self.split_map_path, "r", encoding="utf-8") as f:
@@ -150,7 +163,7 @@ class HFDatasetDownloader:
         Yerel diski korur (< 10 MB).
         """
         manifest = self.read_accepted_manifest()
-        split_map = self._get_split_map()
+        split_map = self._get_split_map() if split else {}
 
         filtered_rows = []
         video_counts: Dict[str, int] = {}
@@ -326,7 +339,7 @@ class HFDatasetDownloader:
         """
         Yerel diskte halihazırda bulunan geçerli klipleri döndürür.
         """
-        split_map = self._get_split_map()
+        split_map = self._get_split_map() if split else {}
         available = []
         if not self.clips_dir.exists():
             return available
