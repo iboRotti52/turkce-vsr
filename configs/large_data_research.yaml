@@ -68,6 +68,7 @@ checkpointing:
     - candidate_version
     - seed
     - initializer_id
+    - initializer_sha256
 
 research:
   starting_prior: c0.4.0
