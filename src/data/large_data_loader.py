@@ -69,3 +69,18 @@ def build_large_data_loader(
         shuffle=False,
         **common,
     )
+
+
+def set_large_data_loader_epoch(loader: DataLoader, epoch: int) -> None:
+    """Advance deterministic bucket shuffling for a training epoch.
+
+    Call exactly once before iterating each training epoch. This is explicit
+    because ordinary PyTorch DataLoader does not call set_epoch on custom batch
+    samplers automatically.
+    """
+    if epoch < 0:
+        raise ValueError("epoch negatif olamaz.")
+    sampler = getattr(loader, "batch_sampler", None)
+    if not isinstance(sampler, SequenceBucketSampler):
+        raise TypeError("Training loader SequenceBucketSampler kullanmıyor.")
+    sampler.set_epoch(epoch)
