@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any, List, Optional, Tuple
 
 import torch
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset
 
 from src.data.dataset import SequenceBucketSampler, pad_collate_fn
 
@@ -15,6 +15,45 @@ DEFAULT_BUCKETS: List[Tuple[float, float, int]] = [
     (3.5, 8.0, 6),
     (8.0, 100.0, 2),
 ]
+
+
+
+class StageDatasetView(Dataset):
+    """Train-only view pinned to the exact sample IDs from a large-data stage."""
+
+    def __init__(self, dataset: Any, sample_ids: List[str]):
+        samples = getattr(dataset, "samples", None)
+        if samples is None:
+            raise TypeError("StageDatasetView base dataset '.samples' alanı sağlamalıdır.")
+        if not sample_ids:
+            raise ValueError("Large-data stage sample listesi boş olamaz.")
+        if len(sample_ids) != len(set(sample_ids)):
+            raise ValueError("Large-data stage duplicate sample id içeriyor.")
+
+        id_to_index = {}
+        for idx, sample in enumerate(samples):
+            sample_id = f"{sample.get('video_id', '')}/{sample.get('seg_id', '')}"
+            if sample_id in id_to_index:
+                raise ValueError(f"Base dataset duplicate sample id içeriyor: {sample_id}")
+            id_to_index[sample_id] = idx
+
+        missing = [sample_id for sample_id in sample_ids if sample_id not in id_to_index]
+        if missing:
+            preview = missing[:5]
+            raise RuntimeError(
+                f"Large-data stage base dataset'te bulunmayan {len(missing)} sample içeriyor: {preview}"
+            )
+
+        self.dataset = dataset
+        self.indices = [id_to_index[sample_id] for sample_id in sample_ids]
+        self.samples = [samples[idx] for idx in self.indices]
+        self.cache_in_ram = bool(getattr(dataset, "cache_in_ram", False))
+
+    def __len__(self) -> int:
+        return len(self.indices)
+
+    def __getitem__(self, idx: int):
+        return self.dataset[self.indices[idx]]
 
 
 def build_large_data_loader(
