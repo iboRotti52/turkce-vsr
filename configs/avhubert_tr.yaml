@@ -1,0 +1,20 @@
+# Pretrained AV-HubERT / Auto-AVSR Fine-Tuning on Turkish Visual Speech Recognition
+
+pretrained_model:
+  name: "avhubert_large_voxceleb2"
+  weights_url: "https://huggingface.co/facebook/av-hubert-large"
+  freeze_frontend_epochs: 5
+  gradual_unfreeze: true
+
+tokenizer:
+  type: "char_ctc"
+  special_tokens: ["<blank>", "<pad>", "<unk>", "<space>"]
+  language: "tr"
+
+training:
+  batch_size: 4
+  accumulate_grad_batches: 2
+  learning_rate: 0.00003
+  max_epochs: 30
+  lr_scheduler: "cosine_with_warmup"
+  warmup_epochs: 3

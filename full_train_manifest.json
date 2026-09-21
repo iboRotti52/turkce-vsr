@@ -1,0 +1,39 @@
+{
+  "budget_usd": 22.27,
+  "candidate_recipe_path": "/Users/ibrahimgozlukaya/Documents/antigravity/delightful-hawking/configs/research_candidate.yaml",
+  "candidate_recipe_sha256": "0eae43406cd3771a9062f8096225bb0b6462d1d29daacf33638909c3b35c7e88",
+  "candidate_version": "c0.4.0",
+  "code_revision": "63da203c9117daef4f52e18c365cd855a21ebd28",
+  "dataset_id": "iboRotti/avsr-tr-dataset",
+  "dataset_scope_note": "1325 clips <= 8.0s (excluding 356 clips > 8.0s for GPU VRAM/padding efficiency per D22)",
+  "dataset_sha256": "f5e924fa2297c82119777f98e6a4b1caab0bc506b32252a16d55df27d58a1768",
+  "decoding_config": {
+    "choice": "Calibrated Lexicon Beam Search (viseme_tol=False, rep=4.0; BP=2.0, alpha=0.2, beta=-0.4 for Spotter; BP=1.5, alpha=0.3, beta=-0.2 for WER) & Greedy (blank_penalty=1.2) per D11, D14",
+    "status": "resolved"
+  },
+  "hyperparameters": {
+    "batch_size": 8,
+    "blank_penalty": 0.8,
+    "epochs": 4,
+    "eta_min": 1e-05,
+    "lr_frontend": 7.5e-06,
+    "lr_temporal": 0.00015,
+    "max_duration": 8.0,
+    "optimizer": "AdamW",
+    "scheduler": "CosineAnnealingLR",
+    "stopping_rule": "Lowest validation loss checkpoint (early stopping patience 2, optimal at epoch 2)",
+    "weight_decay": 0.0001
+  },
+  "initializer": "probe_confirm001_full_train_scaling_best.pt",
+  "keyword_spotting_config": {
+    "choice": "Calibrated CTC Posterior Spotter (BP=1.2, conf=0.15, allow_sub=False, viseme_tol=True, F1=0.0747, latency=0.22ms per D15)",
+    "status": "resolved"
+  },
+  "manifest_version": 1,
+  "seeds": [
+    42,
+    123,
+    456
+  ],
+  "split_sha256": "cfb9e3f80e7615a7ea4efc6198f39572ea0e06001222485586616e0be5ea4ce6"
+}

@@ -1,0 +1,13 @@
+{
+  "dataset_id": "iboRotti/avsr-tr-dataset",
+  "total_accepted_clips": 2683,
+  "train_clips": 1681,
+  "val_clips": 385,
+  "test_clips": 617,
+  "hashes": {
+    "train.csv": "f5e924fa2297c821206a66641264971c97d8a012d2e294150693e8c03067da28",
+    "val.csv": "cfb9e3f80e7615a7a1ea530985394c66374d9ed66e8e74c1484f8d8f9f2e8070",
+    "test.csv": "1a0f16d9928aaf7f772469adbf728e972f051300d43a420ed6543853d0dbf125",
+    "split_map_iborotti.json": "9f9438ce9fe826fc2f79d12ef9d8b22692eb019967293f926617fe9fe4f2c75a"
+  }
+}

@@ -1,0 +1,97 @@
+{
+  "manifest_counts": {
+    "all.jsonl": 3011,
+    "all.csv": 3011,
+    "accepted.csv": 2683,
+    "rejected.csv": 245,
+    "review.csv": 83
+  },
+  "disk_clip_count": 2766,
+  "fps_counts": {
+    "25.0": 2766
+  },
+  "res_counts": {
+    "(96, 96)": 2766
+  },
+  "duration_hours": 4.377333333333331,
+  "accepted_disk_count": 2683,
+  "total_unique_words": 9342,
+  "accepted_unique_words": 9200,
+  "videos": {
+    "6RBn0IVd3J4": {
+      "channel": "AVANGART",
+      "total": 411,
+      "accepted": 407
+    },
+    "6rVFTG4dU8Q": {
+      "channel": "Guncel Turkce Learn Turkish",
+      "total": 49,
+      "accepted": 36
+    },
+    "85eQE_7Q42M": {
+      "channel": "Guncel Turkce Learn Turkish",
+      "total": 20,
+      "accepted": 13
+    },
+    "AH3xXKTZllo": {
+      "channel": "Akil Ünüvar",
+      "total": 176,
+      "accepted": 176
+    },
+    "CHLK5VPdSaM": {
+      "channel": "Guncel Turkce Learn Turkish",
+      "total": 35,
+      "accepted": 29
+    },
+    "IMrviWiYTMQ": {
+      "channel": "Akil Ünüvar",
+      "total": 209,
+      "accepted": 209
+    },
+    "MCjBZZKHMIg": {
+      "channel": "kötü emeller",
+      "total": 296,
+      "accepted": 293
+    },
+    "OSAD_bx3AE8": {
+      "channel": "Guncel Turkce Learn Turkish",
+      "total": 16,
+      "accepted": 11
+    },
+    "Rc9eWjo0_r0": {
+      "channel": "ComputerConcepts",
+      "total": 212,
+      "accepted": 198
+    },
+    "huwvvvYt06w": {
+      "channel": "Onur Tirpan",
+      "total": 353,
+      "accepted": 349
+    },
+    "qqZyHdbjdwA": {
+      "channel": "Mustafa B. Bozkurt [Lex Historiae]",
+      "total": 202,
+      "accepted": 197
+    },
+    "rmbj5LqNKWs": {
+      "channel": "Furkan Ozturk",
+      "total": 283,
+      "accepted": 282
+    },
+    "szxWQTNNCho": {
+      "channel": "Furkan Ozturk",
+      "total": 241,
+      "accepted": 240
+    },
+    "tLL1l2x2XBw": {
+      "channel": "Guncel Turkce Learn Turkish",
+      "total": 36,
+      "accepted": 21
+    },
+    "yRv-y6Yg5kw": {
+      "channel": "Pelin Dilara Çolak",
+      "total": 227,
+      "accepted": 222
+    }
+  }
+}

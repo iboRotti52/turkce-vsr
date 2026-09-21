@@ -1,0 +1,79 @@
+# Python bytecode and cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# Model checkpoints and weights (ağır dosyalar; README ve .gitkeep takip edilir)
+checkpoints/*
+!checkpoints/README.md
+!checkpoints/.gitkeep
+*.pt
+*.pth
+*.bin
+*.safetensors
+*.onnx
+*.engine
+
+# Large video data and datasets
+data/raw/*
+!data/raw/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.gif
+
+# Metrics & tracking
+runs/
+.trackio/
+*.log
+.pytest_cache/
+*.tar.gz
+*.zip
+
+# Environments & credentials
+.env
+.env.local
+
+# IDE & OS
+.DS_Store
+.vscode/
+.idea/
+Thumbs.db
+
+# macOS duplicate artifacts (local drafts, not for GitHub)
+* 2.md
+* 2.jsonl
+
+# Master dataset from S3
+data/master/*
+data/iborotti/*
+
+# Hugging Face cache & downloads
+.cache/
+.hf_cache/

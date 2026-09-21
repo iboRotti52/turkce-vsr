@@ -1,0 +1,28 @@
+# Core Deep Learning
+torch>=2.1.0
+torchvision>=0.16.0
+torchaudio>=2.1.0
+
+# Computer Vision & Landmark Extraction
+opencv-python>=4.8.0
+mediapipe>=0.10.0
+numpy>=1.24.0
+scipy>=1.10.0
+Pillow>=10.0.0
+
+# Hugging Face Ecosystem
+transformers>=4.38.0
+datasets>=2.18.0
+huggingface-hub>=0.21.0
+trackio>=0.1.0
+accelerate>=0.28.0
+
+# Web Demo & UI
+gradio>=4.20.0
+
+# Evaluation & Metrics
+jiwer>=3.0.3
+
+# Configuration & Utilities
+pyyaml>=6.0.1
+tqdm>=4.66.0

@@ -1,0 +1,34 @@
+# Baseline 3D-ResNet + BiGRU/Conformer CTC Training Configuration
+
+model:
+  name: "TurkishLipReadingModel"
+  in_channels: 1
+  hidden_dim: 512
+  num_temporal_layers: 3
+  dropout: 0.2
+
+preprocessing:
+  target_size: [88, 88]
+  target_fps: 25
+  grayscale: true
+  mean: 0.421
+  std: 0.165
+  smoothing_alpha: 0.75
+
+dataset:
+  train_manifest: "data/metadata/train.csv"
+  val_manifest: "data/metadata/val.csv"
+  test_manifest: "data/metadata/test.csv"
+  max_time_mask_frames: 3
+  horizontal_flip_prob: 0.5
+
+training:
+  batch_size: 8
+  learning_rate: 0.0001
+  weight_decay: 0.00001
+  max_epochs: 50
+  mixed_precision: true
+  gradient_clip_norm: 5.0
+  checkpoint_dir: "checkpoints"
+  log_interval: 10
+  use_trackio: true

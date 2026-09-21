@@ -1,0 +1,108 @@
+"""
+src/experiments/tracker.py — Research-Craft Otomatik Deney Kayıt Kütüğü
+"""
+
+import json
+import os
+import pathlib
+from dataclasses import asdict, dataclass, field
+from datetime import datetime
+from typing import Any, Dict, List, Optional
+
+EXPERIMENTS_REGISTRY_PATH = (
+    pathlib.Path(__file__).resolve().parent.parent.parent / "experiments" / "registry.jsonl"
+)
+
+
+@dataclass
+class ExperimentRecord:
+    experiment_id: str
+    hypothesis: str
+    falsification_criteria: str
+    setup: Dict[str, Any]
+    expectation: str
+    timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat() + "Z")
+    result: Optional[Dict[str, Any]] = None
+    status: str = "IN_PROGRESS"  # IN_PROGRESS, PASSED, FALSIFIED, ERROR
+    surprise: str = ""
+    updated_belief: str = ""
+    next_step: str = ""
+    cost_estimate_usd: Optional[float] = None
+    cost_usd: Optional[float] = None
+    extra_fields: Dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> Dict[str, Any]:
+        d = asdict(self)
+        extra = d.pop("extra_fields", {})
+        d.update(extra)
+        if d.get("cost_estimate_usd") is None:
+            d.pop("cost_estimate_usd", None)
+        if d.get("cost_usd") is None:
+            d.pop("cost_usd", None)
+        return d
+
+
+class ExperimentTracker:
+    def __init__(self, registry_path: Optional[pathlib.Path] = None):
+        self.registry_path = registry_path or EXPERIMENTS_REGISTRY_PATH
+        self.registry_path.parent.mkdir(parents=True, exist_ok=True)
+
+    def log(self, record: ExperimentRecord) -> None:
+        """Deney kaydını registry.jsonl dosyasına güvenli ekler veya günceller."""
+        lines = []
+        updated = False
+        if self.registry_path.exists():
+            with open(self.registry_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    raw = line.strip()
+                    if not raw:
+                        continue
+                    try:
+                        data = json.loads(raw)
+                        if data.get("experiment_id") == record.experiment_id:
+                            lines.append(json.dumps(record.to_dict(), ensure_ascii=False))
+                            updated = True
+                        else:
+                            lines.append(raw)
+                    except Exception:
+                        lines.append(raw)
+
+        if not updated:
+            lines.append(json.dumps(record.to_dict(), ensure_ascii=False))
+
+        with open(self.registry_path, "w", encoding="utf-8") as f:
+            for line in lines:
+                f.write(line + "\n")
+
+    def load_all(self) -> List[ExperimentRecord]:
+        if not self.registry_path.exists():
+            return []
+        import dataclasses
+        valid_fields = {f.name for f in dataclasses.fields(ExperimentRecord)}
+        records = []
+        with open(self.registry_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    try:
+                        data = json.loads(line)
+                        known = {k: v for k, v in data.items() if k in valid_fields and k != "extra_fields"}
+                        extra = {k: v for k, v in data.items() if k not in valid_fields}
+                        records.append(ExperimentRecord(**known, extra_fields=extra))
+                    except Exception:
+                        pass
+        return records
+
+    def print_summary(self) -> None:
+        records = self.load_all()
+        print(f"\n🔬 TOPLAM DENEY SAYISI: {len(records)}")
+        print("=" * 80)
+        for r in records:
+            print(f"[{r.status}] {r.experiment_id}")
+            print(f"  Hipotez:    {r.hypothesis}")
+            print(f"  Beklenti:   {r.expectation}")
+            if r.result:
+                print(f"  Sonuç:      {r.result}")
+            if r.updated_belief:
+                print(f"  Çıkarım:    {r.updated_belief}")
+            print("-" * 80)

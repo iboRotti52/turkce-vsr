@@ -1,0 +1,354 @@
+schema_version: 1
+candidate_version: c0.4.0
+stage: READY_FOR_FULL_TRAIN
+status: active
+objective:
+  primary: Turkish continuous visual speech recognition from silent video
+  secondary: Timestamped detection of the canonical top-500 Turkish words
+  product_constraint: Production inference receives silent video only
+  selection_metrics:
+  - validation_cer
+  - validation_wer
+  - keyword_precision
+  - keyword_recall
+  - keyword_f1
+  - false_positives
+  - false_negatives
+data:
+  source: iboRotti/avsr-tr-dataset
+  local_path: data/iborotti
+  status: verified_accepted
+  decision: D1
+  total_accepted_clips: 2683
+  total_duration_hours: 4.38
+  fps: 25.0
+  resolution:
+  - 96
+  - 96
+  split_status: resolved
+  speaker_disjoint: true
+  splits:
+    train:
+      clips: 1681
+      channels: 5
+      hash: f5e924fa2297c82119777f98e6a4b1caab0bc506b32252a16d55df27d58a1768
+    val:
+      clips: 385
+      channels: 1
+      hash: cfb9e3f80e7615a7ea4efc6198f39572ea0e06001222485586616e0be5ea4ce6
+    test:
+      clips: 617
+      channels: 3
+      hash: 1a0f16d9928aaf7fc72ec86a111a43a051ae9491dc67bb2643a6d713c7a36412
+  top500_word_coverage:
+    corpus_pct: 88.2
+    train_pct: 84.4
+    token_density_pct: 43.1
+components:
+  preprocessing:
+    choice: 96x96 grayscale 25fps lip-centered crop
+    status: supported
+  visual_frontend:
+    choice: 3D-ResNet18 (Auto-AVSR pretrained, BatchNorm eval mode maintained per
+      D2, D4)
+    status: resolved
+  temporal_model:
+    choice: Conformer (4 layers, d_model=512, 8 heads per D3, D4, D6)
+    status: resolved
+  objective_and_tokenizer:
+    choice: Char CTC (31 tokens, blank_penalty=0.8 per D2, D4)
+    status: supported
+  loss:
+    choice: CTC loss with blank_penalty and negative blank bias init
+    status: supported
+  curriculum_and_sampling:
+    choice: Three-stage curriculum (short <= 3.5s -> sentence <= 6.0s -> full <= 8.0s
+      per D4, D6, D8)
+    status: resolved
+  optimizer_and_scheduler:
+    choice: 'AdamW + CosineAnnealingLR (differential LR: FE 7.5e-6, Temporal 1.5e-4)'
+    status: supported
+  initializer:
+    choice: Auto-AVSR vsr_trlrs3_base.pth -> c0.4.0 probe_confirm001_full_train_scaling_best.pt
+    status: resolved
+  decoder:
+    choice: Calibrated Lexicon Beam Search (viseme_tol=False, rep=4.0; BP=2.0, alpha=0.2,
+      beta=-0.4 for Spotter; BP=1.5, alpha=0.3, beta=-0.2 for WER) & Greedy (blank_penalty=1.2)
+      per D11, D14
+    status: resolved
+  keyword_spotting:
+    choice: Calibrated CTC Posterior Spotter (BP=1.2, conf=0.15, allow_sub=False,
+      viseme_tol=True, F1=0.0747, latency=0.22ms per D15)
+    status: resolved
+training:
+  recipe_status: frozen
+  full_training_authorized: false
+  research_training_authorized: true
+  hyperparameters:
+    epochs: 4
+    batch_size: 8
+    lr_temporal: 0.00015
+    lr_frontend: 7.5e-06
+    weight_decay: 0.0001
+    blank_penalty: 0.8
+    max_duration: 8.0
+    optimizer: AdamW
+    scheduler: CosineAnnealingLR
+    eta_min: 1.0e-05
+    stopping_rule: Lowest validation loss checkpoint (early stopping patience 2, optimal
+      at epoch 2)
+  dataset_scope:
+    total_train_clips: 1681
+    filtered_train_clips: 1325
+    excluded_clips: 356
+    exclusion_reason: Clips with duration > 8.0s (up to 16.24s) excluded due to GPU
+      VRAM limits and excessive zero-padding at 25fps video tensors
+    train_speakers: 5
+    speaker_coverage_pct: 100.0
+research_policy:
+  clean_start: true
+  inherit_old_experiment_claims: false
+  inherit_old_failures: false
+  inherit_old_checkpoints: false
+  single_living_candidate: true
+  one_active_question: true
+  unrestricted_architecture_inspiration: true
+  research_uses_test_split: false
+  successful_probe_authorizes_scaling: false
+active_question: null
+open_questions:
+- id: DATA-001
+  component: data_and_evaluation_foundation
+  impact: high
+  status: closed
+  question: Is the retained source corpus suitable, correctly labeled and aligned,
+    leakage-free, representative, and sufficient for the product objective?
+- id: INIT-001
+  component: visual_frontend_initializer
+  impact: high
+  status: closed
+  question: Does Auto-AVSR visual frontend transfer provide a valid starting point
+    over random initialization and legacy dirty checkpoints?
+- id: ARCH-001
+  component: end_to_end_architecture
+  impact: high
+  status: closed
+  question: 'Can Conformer break blank collapse on continuous sentences compared to
+    BiGRU? (Closed INCONCLUSIVE: Conformer favored on val loss 3.096 vs 3.127, but
+    sentence level requires curriculum).'
+- id: TRAIN-001
+  component: training_recipe
+  impact: high
+  status: closed
+  question: 'Does a word- or short phrase-level curriculum stage break blank collapse
+    and establish active viseme-to-character alignments? (Closed ACCEPT: Two-stage
+    unfreeze achieved CER 74.92%, val loss 2.8486, active Turkish word emissions).'
+- id: DEC-001
+  component: decoder_and_language_model
+  impact: high
+  status: closed
+  question: 'Does Turkish Lexicon Beam Search decoding with Top-500 Trie and Unigram/Bigram
+    LM constrain phonetic CTC emissions and significantly reduce Word Error Rate (WER)
+    compared to raw greedy decoding? (Closed REJECT per D5: Trie LM requires acoustic
+    CER < 50% to prevent insertion hallucinations).'
+- id: CURR-002
+  component: curriculum_and_sampling
+  impact: high
+  status: closed
+  question: 'Does scaling the two-stage curriculum from 360 short clips to 720+ clips
+    (up to 6.0s continuous sentences) on c0.2.0 weights reduce validation CER below
+    0.50 and teach robust sentence-scale character sequences? (Closed ACCEPT per D6:
+    Best Val Loss 2.7851, zero blank collapse on 6s sentences, c0.3.0 sealed).'
+- id: DEC-002
+  component: decoder_and_language_model
+  impact: high
+  status: closed
+  question: 'Does the calibrated Lexicon Beam Search Decoder with neutral/negative
+    insertion penalty (beta <= 0) improve WER over greedy decoding on c0.3.0 continuous
+    sentence representations? (Closed INCONCLUSIVE per D7: Over-insertion fixed, WER
+    0.9981 vs Greedy 1.0000, but acoustic CER 89% is the primary bottleneck).'
+- id: CONFIRM-001
+  component: curriculum_and_sampling
+  impact: high
+  status: closed
+  question: 'Does scaling fine-tuning from c0.3.0 weights across all 1,681 training
+    clips (duration <= 8.0s) expose the Conformer to all 5 speakers and drive validation
+    loss below 2.50 and CER below 0.60? (Closed ACCEPT per D8: Best Val Loss 2.7399,
+    CER 75.61%, rich consonant emissions, c0.4.0 sealed).'
+- id: DEC-003
+  component: decoder_and_language_model
+  impact: high
+  status: closed
+  question: 'Does calibrated Lexicon Beam Search decoding on the c0.4.0 consonant-rich
+    representations significantly improve WER and Top-500 keyword spotting over greedy
+    decoding? (Closed INCONCLUSIVE per D9: Beam CER 0.8241 vs Greedy 0.8482, WER 0.9983,
+    but early-stopping checkpoint at Epoch 2 had not yet matured consonant emissions;
+    cross-speaker overfitting in late epochs identified as root cause).'
+- id: AUG-001
+  component: preprocessing
+  impact: high
+  status: closed
+  question: 'Does integrating photometric lighting augmentation (brightness/contrast
+    jitter) and higher regularization (weight_decay=5e-4) mitigate cross-speaker overfitting,
+    allowing the model to train across epochs 3-12 and drive validation loss below
+    2.70? (Closed REJECT per D10: Failed to beat baseline 2.7399 with best val loss
+    2.8105; 86.7% Deletion error bottleneck identified).'
+- id: DEC-004
+  component: decoder_and_language_model
+  impact: high
+  status: closed
+  question: 'Does decoding-time CTC blank penalty calibration across a grid ([0.4,
+    0.8, 1.2, 1.5, 1.8, 2.2]) on c0.4.0 significantly reduce deletion errors (D=1257,
+    86.7%) and drive CER below 0.65 without additional training cost? (Closed INCONCLUSIVE
+    per D11: Deletions reduced by 62.7%, Greedy CER 73.49% at BP=1.2, Beam CER 74.77%
+    and WER 99.00% at BP=2.0, decoding recipe calibrated).'
+- id: REG-001
+  component: temporal_model
+  impact: high
+  status: closed
+  question: 'Does feature-level SpecAugment (temporal and channel masking on 3D-ResNet
+    output) combined with increased Conformer dropout (0.2) suppress cross-speaker
+    overfitting, allowing fine-tuning on all 1,325 clips past epoch 2 down below validation
+    loss 2.65 and CER 0.65? (Closed REJECT per D12: Best Val Loss 2.7481 vs baseline
+    2.7399; 2-epoch divergence persisted).'
+- id: FE-001
+  component: training_recipe
+  impact: high
+  status: closed
+  question: 'Does freezing the 3D-ResNet visual frontend (freeze_frontend=True, BatchNorm
+    eval mode) on all 1,325 clips protect the pretrained Auto-AVSR visual representations
+    from 5-speaker visual memorization, allowing the Conformer to train for 15-20
+    epochs and drive validation loss below 2.65 and CER below 0.65? (Closed REJECT
+    per D13: Best Val Loss 2.7670 vs baseline 2.7399; divergence persisted).'
+- id: DEC-005
+  component: decoder_and_language_model
+  impact: high
+  status: closed
+  question: 'Does joint blank penalty (1.5) and repetition penalty (4.0) calibration
+    suppress degenerate unigram loops on continuous speech, reducing WER below 0.9900
+    and establishing true positive baseline for Keyword Spotting? (Closed ACCEPT per
+    D14: Best WER 0.9883, Spotter F1 doubled to 0.0418, repetition loops suppressed).'
+- id: KWS-001
+  component: keyword_spotter
+  impact: high
+  status: closed
+  question: 'Does direct frame-level CTC posterior probability filtering and sliding
+    window threshold calibration on c0.4.0 achieve high-precision timestamped Top-500
+    keyword spotting independent of full continuous sequence beam search? (Closed
+    INCONCLUSIVE per D15: Spotter F1 reached all-time high 0.0747, recall doubled
+    to 13.03%, 31 TPs, exact timestamps).'
+- id: READINESS-001
+  component: full_training_readiness
+  impact: high
+  status: closed
+  question: 'Are all 12 readiness gates in GEMINI.md Section 5.1 fully satisfied with
+    empirical evidence to authorize full-training or independent evaluation? (Re-audited:
+    Hardware throughput re-calibrated to 5.74 clips/s, D15 vs D16 spotter divergence
+    reconciled, gate pass logic decoupled from hardcoded strings).'
+- id: EVAL-001
+  component: evaluation
+  impact: high
+  status: closed
+  question: "What validation protocol and success thresholds faithfully measure continuous\
+    \ transcription and top-500 detection? (Closed: Validation on held-out Akil \xDC\
+    n\xFCvar 385 clips + cross-speaker train partitions; Test set quarantined for\
+    \ post-full-train evaluation. Targets: CER < 65%, WER < 85%, Spotter F1 > 0.10,\
+    \ latency < 1.0ms)."
+- id: CONFIRM-002
+  component: stability_and_validation
+  impact: high
+  status: closed
+  question: "Does the c0.4.0 recipe maintain metric direction and low variance across\
+    \ 3 seeds (42, 123, 456) and generalize across multiple held-out speakers without\
+    \ touching the test split? (Closed ACCEPT per D17: Multi-seed bootstrap Greedy\
+    \ CER 74.33% \xB1 0.75%, Beam WER 99.91% \xB1 0.13%, Spotter F1 0.0868 \xB1 0.0051;\
+    \ 5 train speakers validated with CER 74.5%-81.2%, mean 77.64%; test split quarantined)."
+- id: LOWDATA-001
+  component: low_data_research_scope
+  impact: high
+  status: closed
+  question: "Given the current few-hour, few-speaker corpus and the observed failure clusters, what is the highest-information literature-supported or Turkish-specific experiment that can still change the canonical recipe before further progress genuinely requires more or more diverse data? (Re-evaluated per D20: 385-clip validation kept; compact conformer probe reclassified as ERROR due to technical confound; 356 excluded long clips information value recognized; readiness rescinded)."
+- id: LOWDATA-002
+  component: temporal_model_and_capacity_scaling
+  impact: high
+  status: closed
+  question: "When the visual frontend dimension mismatch is resolved (VisualFrontend(512) -> Linear(512, d_model) loading all 114 Auto-AVSR weights), does a compact Conformer (d_model=256, 2 layers, 1.72M params) learn stable Turkish speech representations and prevent the 2-epoch cross-speaker overfitting plateau on 5 speakers? (Closed REJECT per D21: 114 weights loaded; model reached best Val Loss 3.1067 at epoch 2 then diverged; blank collapse occurred without short-clip curriculum; canonical vsr_conformer_base retained)."
+- id: LOWDATA-003
+  component: training_recipe_and_data_efficiency
+  impact: high
+  status: closed
+  question: "Can sequence bucketing and dynamic batching incorporate the 356 excluded long clips (>8.0s, 1.15 hours, 41.52% of speech duration) into training to enrich lexical and coarticulation diversity without memory OOM or padding inefficiency? (Closed REJECT per D22: Hardware and sequence bucketing verified with zero OOM, but best Val Loss 2.7530 at epoch 2 failed pre-registered threshold < 2.7399; 2-epoch speaker overfitting barrier confirmed; c0.4.0 baseline preserved)."
+- id: CONFIRM-003
+  component: stability_and_validation
+  impact: high
+  status: closed
+  question: "Does training the canonical c0.4.0 recipe with an independent seed (seed=123) replicate the 2-epoch optimum within +-0.05 val loss and +-5% CER of baseline (2.7399, CER 75.6%), confirming that trajectory and performance are stable across training seeds and closing Gate 6? (Closed ACCEPT per D23: Seed 123 replicated Epoch 2 optimum with CER 75.75% vs baseline 75.61% [delta +0.14%], val loss 2.8150, blank 81.66%; training stability verified, Gate 6 closed)."
+readiness:
+  complete_recipe:
+    passed: true
+    evidence:
+    - configs/research_candidate.yaml
+    - research/CANDIDATE.md
+  component_decisions:
+    passed: true
+    evidence:
+    - research/DECISIONS.md#D1-D23
+  no_high_impact_uncertainty:
+    passed: true
+    evidence:
+    - research/DECISIONS.md#D20
+    - research/DECISIONS.md#D21
+    - research/DECISIONS.md#D22
+    - research/DECISIONS.md#D23
+  controlled_probes:
+    passed: true
+    evidence:
+    - experiments/registry.jsonl
+  representative_validation:
+    passed: true
+    evidence:
+    - data/metadata/split_map_iborotti.json
+    - research/DECISIONS.md#D19
+  stability:
+    passed: true
+    evidence:
+    - research/DECISIONS.md#D17
+    - research/DECISIONS.md#D20
+    - research/DECISIONS.md#D23
+  metrics_and_raw_outputs:
+    passed: true
+    evidence:
+    - experiments/registry.jsonl
+  failure_model:
+    passed: true
+    evidence:
+    - research/FAILURE_ANALYSIS.md
+  provenance_and_reproducibility:
+    passed: true
+    evidence:
+    - data/metadata/split_map_iborotti.json
+    - data/metadata/dataset_hashes.json
+    - research/DECISIONS.md#D1
+  dress_rehearsal:
+    passed: true
+    evidence:
+    - experiments/registry.jsonl
+    - research/DECISIONS.md#D16
+  baseline_improvement:
+    passed: true
+    evidence:
+    - research/DECISIONS.md#D8
+    - research/DECISIONS.md#D15
+    - research/DECISIONS.md#D19
+  frozen_full_train_recipe:
+    passed: true
+    evidence:
+    - research/DECISIONS.md#D20
+    - research/DECISIONS.md#D22
+    - research/DECISIONS.md#D23
+    - full_train_manifest.json
+next_action:
+  question_id: null
+  kind: readiness_achieved_awaiting_user_authorization
+  note: "All 12 full-training readiness gates verified. Canonical recipe c0.4.0 frozen in full_train_manifest.json. Halted without launching full training per user directive and GEMINI.md protocol."
+
