@@ -96,8 +96,13 @@ uyarlayarak üzerine yazma.
   videoları RAM'e preload etme.
 - Uzun koşuların checkpoint'i model dışında optimizer, scheduler, AMP scaler, epoch,
   global step, sampler epoch, RNG state ve provenance taşımalıdır
-  (`src/training_state.py`).
-- Resume sırasında dataset id/revision, split hash, code revision veya candidate
-  version değişmişse fail-closed dur; farklı koşuyu aynı run gibi sürdürme.
+  (`src/training_state.py`). Eğitim loader'ında her epoch başında
+  `set_large_data_loader_epoch(loader, epoch)` çağrılır.
+- Resume **epoch-boundary** sözleşmesidir: model/optimizer/scheduler/scaler ve ana RNG
+  state geri gelir; process restart sonrası DataLoader worker augmentation akışının
+  bit-bit aynı replay edildiği iddia edilmez.
+- Resume sırasında dataset id/revision, split hash, **train stage sample hash**,
+  candidate recipe hash, seed, initializer, code revision veya candidate version
+  değişmişse fail-closed dur; 10h checkpoint'ini 25h run gibi sürdürme.
 - Full training ancak yeni veri rejiminde readiness kapıları yeniden geçilip yeni
   candidate recipe dondurulduktan sonra başlatılabilir.
