@@ -132,7 +132,6 @@ def test_controller_constrains_cost_not_scientific_search_space():
     validate_scale_experiment_plan(
         plan,
         large_data_plan=_large_data_plan(),
-        setup=_execution_setup(),
         remaining_budget_usd=10.0,
     )
 
@@ -203,7 +202,6 @@ def test_accept_can_promote_only_with_predeclared_rule_met(tmp_path):
         tracker=tracker,
         source_experiment_id=source.experiment_id,
         large_data_plan=_large_data_plan(),
-        setup=_execution_setup(),
         remaining_budget_usd=8.0,
     )
 
@@ -271,7 +269,6 @@ def test_inconclusive_is_not_automatic_promotion(tmp_path):
         tracker=tracker,
         source_experiment_id=source.experiment_id,
         large_data_plan=_large_data_plan(),
-        setup=_execution_setup(),
         remaining_budget_usd=8.0,
     )
 
@@ -708,7 +705,6 @@ def test_validated_promotion_creates_parent_child_registry_chain(tmp_path):
         source_experiment_id=completed.experiment_id,
         target_experiment_id="probe_arch_ld202_25h",
         large_data_plan=_large_data_plan(),
-        setup=_execution_setup(),
         remaining_budget_usd=4.5,
     )
 
