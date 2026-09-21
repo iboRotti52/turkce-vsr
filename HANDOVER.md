@@ -93,7 +93,9 @@ uyarlayarak üzerine yazma.
   araştırma sırasında indirilmez/değerlendirilmez.
 - Her hipotezi doğrudan 50–100 saatte koşma. En ucuz speaker-diverse stage'de başla;
   yalnız önceden yazılmış karar kuralı geçerse daha büyük stage'e ölçekle.
-- `SequenceBucketSampler` ile duration-aware batching kullan; 50–100 saat için tüm
+- `StageDatasetView` ile seçilen 10h/25h/50h/100h planının **tam sample ID listesini**
+  dataset'e bağla; stage listesi ile gerçek loader arasında sessiz fallback olmasın.
+  `SequenceBucketSampler` ile duration-aware batching kullan; 50–100 saat için tüm
   videoları RAM'e preload etme.
 - Uzun koşuların checkpoint'i model dışında optimizer, scheduler, AMP scaler, epoch,
   global step, sampler epoch, RNG state ve provenance taşımalıdır
@@ -103,7 +105,7 @@ uyarlayarak üzerine yazma.
   state geri gelir; process restart sonrası DataLoader worker augmentation akışının
   bit-bit aynı replay edildiği iddia edilmez.
 - Resume sırasında dataset id/revision, split hash, **train stage sample hash**,
-  candidate recipe hash, seed, initializer, code revision veya candidate version
+  candidate recipe hash, seed, initializer kimliği + SHA-256, code revision veya candidate version
   değişmişse fail-closed dur; 10h checkpoint'ini 25h run gibi sürdürme.
 - Full training ancak yeni veri rejiminde readiness kapıları yeniden geçilip yeni
   candidate recipe dondurulduktan sonra başlatılabilir.
