@@ -1,0 +1,65 @@
+schema_version: 1
+phase: large_data_research
+candidate_version: c0.5.0
+candidate_status: not_opened_until_dataset_plan_is_audited
+
+data:
+  source: avsr-tr-ekip/avsr-tr-dataset
+  representation: preprocessed_mouth_clips
+  raw_video_preprocessing_in_scope: false
+  revision_policy: immutable_40_hex_hf_commit_required
+  split_policy:
+    speaker_disjoint: true
+    regenerate_from_new_manifest: true
+    reuse_c0_4_split: false
+    val_fraction: 0.10
+    test_fraction: 0.10
+    seed: 42
+  test_quarantine:
+    research_selection_uses_test: false
+    release_condition: candidate_frozen_or_explicit_final_evaluation
+
+scaling:
+  strategy: nested_speaker_diverse_stages
+  target_train_hours: [10, 25, 50, 100]
+  missing_target_policy: omit_if_train_data_is_smaller
+  full_stage_always_present: true
+  promote_only_after_predeclared_decision_rule: true
+
+loader:
+  cache_all_videos_in_ram: false
+  duration_aware_batching: true
+  sampler: SequenceBucketSampler
+  buckets_seconds:
+    - [0.0, 3.5, 8]
+    - [3.5, 8.0, 6]
+    - [8.0, 100.0, 2]
+  worker_policy: tune_on_training_host
+  persistent_workers_when_workers_gt_zero: true
+  pin_memory_on_cuda: true
+
+checkpointing:
+  resumable: true
+  required_state:
+    - model_state_dict
+    - optimizer_state_dict
+    - scheduler_state_dict
+    - scaler_state_dict
+    - epoch
+    - global_step
+    - sampler_epoch
+    - rng_state
+    - provenance
+  immutable_resume_provenance:
+    - dataset_id
+    - dataset_revision
+    - split_map_sha256
+    - code_revision
+    - candidate_version
+
+research:
+  starting_prior: c0.4.0
+  copy_small_data_results_as_frozen_evidence: true
+  blindly_inherit_data_sensitive_decisions: false
+  first_action: prepare_and_audit_large_data_plan
+  full_training_authorized: false
