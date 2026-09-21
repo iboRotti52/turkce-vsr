@@ -699,11 +699,13 @@ def test_validated_promotion_creates_parent_child_registry_chain(tmp_path):
         estimated_gpu_hours=2.0,
         estimated_cost_usd=1.0,
     )
+    target_rule = "Promote 25h to 50h if WER gain persists and subgroup stability holds."
     child = register_promoted_experiment(
         request,
         tracker=tracker,
         source_experiment_id=completed.experiment_id,
         target_experiment_id="probe_arch_ld202_25h",
+        target_promotion_rule=target_rule,
         large_data_plan=_large_data_plan(),
         remaining_budget_usd=4.5,
     )
@@ -715,6 +717,7 @@ def test_validated_promotion_creates_parent_child_registry_chain(tmp_path):
     assert child.scale_parent_experiment_id == parent.experiment_id
     assert child.data_scale == "25h"
     assert child.technical_status == "IN_PROGRESS"
+    assert child.promotion_rule == target_rule
     assert child.setup["train_subset_sha256"] == "2" * 64
 
 
@@ -967,3 +970,146 @@ def test_nonpositive_hour_stage_fails_closed():
     }
     with pytest.raises(ValueError, match="Bilinmeyen araştırma ölçeği"):
         ordered_research_scales(plan)
+
+
+def test_promoted_child_requires_next_rule_before_results(tmp_path):
+    tracker = ExperimentTracker(tmp_path / "registry.jsonl")
+    plan = ScaleExperimentPlan(
+        question_id="ARCH-LD-501",
+        candidate_version="c0.5.0",
+        hypothesis="Alternative temporal encoder may improve generalization.",
+        requested_scale="10h",
+        minimum_sufficient_scale="10h",
+        falsification_criteria="No WER gain.",
+        expectation="Lower WER.",
+        information_gain_rationale="10h is enough for the first comparison.",
+        why_smaller_scale_is_insufficient="Smoke cannot measure held-out WER.",
+        promotion_rule="Promote 10h to 25h if WER improves >= 3%.",
+        estimated_gpu_hours=1.0,
+        estimated_cost_usd=0.5,
+    )
+    started = register_scale_experiment(
+        plan,
+        tracker=tracker,
+        experiment_id="probe_arch_ld501_10h",
+        large_data_plan=_large_data_plan(),
+        setup=_execution_setup(),
+        remaining_budget_usd=5.0,
+    )
+    completed = complete_scale_experiment(
+        started.experiment_id,
+        tracker=tracker,
+        result={"wer": 0.28},
+        scientific_verdict=ScientificVerdict.ACCEPT,
+        actual_gpu_hours=0.9,
+        actual_cost_usd=0.45,
+        surprise="",
+        updated_belief="Promising.",
+        next_step="Consider 25h.",
+    )
+    request = PromotionRequest(
+        question_id="ARCH-LD-501",
+        candidate_version="c0.5.0",
+        from_scale="10h",
+        to_scale="25h",
+        scientific_verdict=ScientificVerdict.ACCEPT,
+        action=ScaleAction.PROMOTE_SCALE,
+        promotion_rule=plan.promotion_rule,
+        promotion_rule_met=True,
+        evidence_refs=("registry#probe_arch_ld501_10h",),
+        estimated_gpu_hours=2.0,
+        estimated_cost_usd=1.0,
+    )
+    with pytest.raises(ValueError, match="bir sonraki scale promotion rule"):
+        register_promoted_experiment(
+            request,
+            tracker=tracker,
+            source_experiment_id=completed.experiment_id,
+            target_experiment_id="probe_arch_ld501_25h",
+            target_promotion_rule="",
+            large_data_plan=_large_data_plan(),
+            remaining_budget_usd=4.5,
+        )
+
+
+def test_source_experiment_cannot_be_promoted_twice(tmp_path):
+    tracker = ExperimentTracker(tmp_path / "registry.jsonl")
+    source = seal_pre_result_contract(_source_record())
+    tracker.log(source)
+    request = PromotionRequest(
+        question_id="ARCH-LD-001",
+        candidate_version="c0.5.0",
+        from_scale="10h",
+        to_scale="25h",
+        scientific_verdict=ScientificVerdict.ACCEPT,
+        action=ScaleAction.PROMOTE_SCALE,
+        promotion_rule=source.promotion_rule,
+        promotion_rule_met=True,
+        evidence_refs=("registry#source",),
+        estimated_gpu_hours=2.0,
+        estimated_cost_usd=1.0,
+    )
+    register_promoted_experiment(
+        request,
+        tracker=tracker,
+        source_experiment_id=source.experiment_id,
+        target_experiment_id="probe_arch_newfamily_25h_a",
+        target_promotion_rule="Promote 25h to 50h if gain persists.",
+        large_data_plan=_large_data_plan(),
+        remaining_budget_usd=5.0,
+    )
+    with pytest.raises(RuntimeError, match="terminal scale action"):
+        register_promoted_experiment(
+            request,
+            tracker=tracker,
+            source_experiment_id=source.experiment_id,
+            target_experiment_id="probe_arch_newfamily_25h_b",
+            target_promotion_rule="Promote 25h to 50h if gain persists.",
+            large_data_plan=_large_data_plan(),
+            remaining_budget_usd=5.0,
+        )
+
+
+def test_final_available_scale_does_not_require_promotion_rule():
+    plan = ScaleExperimentPlan(
+        question_id="ARCH-LD-502",
+        candidate_version="c0.5.0",
+        hypothesis="A full-data confirmation is scientifically necessary.",
+        requested_scale="full",
+        minimum_sufficient_scale="full",
+        falsification_criteria="No confirmation of the mechanism.",
+        expectation="Confirm the effect on the full research dataset.",
+        information_gain_rationale="The effect is known to emerge only at full scale.",
+        why_smaller_scale_is_insufficient="Prior scaling evidence shows separation only at full scale.",
+        promotion_rule="",
+        estimated_gpu_hours=4.0,
+        estimated_cost_usd=2.0,
+    )
+    validate_scale_experiment_plan(
+        plan,
+        large_data_plan=_large_data_plan(),
+        remaining_budget_usd=5.0,
+    )
+
+
+def test_nonfinite_costs_fail_closed():
+    plan = ScaleExperimentPlan(
+        question_id="ARCH-LD-503",
+        candidate_version="c0.5.0",
+        hypothesis="Test architecture.",
+        requested_scale="10h",
+        minimum_sufficient_scale="10h",
+        falsification_criteria="No gain.",
+        expectation="Gain.",
+        information_gain_rationale="10h comparison.",
+        why_smaller_scale_is_insufficient="Smoke cannot measure WER.",
+        promotion_rule="Promote on reliable WER gain.",
+        estimated_gpu_hours=float("nan"),
+        estimated_cost_usd=0.5,
+    )
+    with pytest.raises(ValueError, match="finite non-negative"):
+        validate_scale_experiment_plan(
+            plan,
+            large_data_plan=_large_data_plan(),
+            remaining_budget_usd=5.0,
+        )
