@@ -402,11 +402,28 @@ def promote_registered_run(
     scale_sensitive_ambiguity: bool = False,
     why_larger_scale_resolves_ambiguity: str = "",
     skip_scale_justification: str = "",
+    candidate_path: pathlib.Path = DEFAULT_CANDIDATE,
     plan_path: pathlib.Path = DEFAULT_PLAN,
+    policy_path: pathlib.Path = DEFAULT_POLICY,
     tracker: Optional[ExperimentTracker] = None,
 ) -> ExperimentRecord:
     tracker = tracker or ExperimentTracker()
+    report = require_session_ready_for_new_run(
+        candidate_path=candidate_path,
+        plan_path=plan_path,
+        policy_path=policy_path,
+        tracker=tracker,
+    )
     source = _find_record(tracker, source_experiment_id)
+    if source.candidate_version != report.candidate_version:
+        raise RuntimeError(
+            f"Promotion source candidate mismatch: {source.candidate_version}!={report.candidate_version}"
+        )
+    source_question = str((source.setup or {}).get("question_id") or "")
+    if source_question != report.active_question:
+        raise RuntimeError(
+            f"Promotion source question mismatch: {source_question}!={report.active_question}"
+        )
     if source.scientific_verdict is None:
         raise RuntimeError("Source experiment scientific verdict içermiyor.")
     plan = load_large_data_plan(plan_path)
@@ -564,7 +581,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             scale_sensitive_ambiguity=args.scale_sensitive_ambiguity,
             why_larger_scale_resolves_ambiguity=args.why_larger_scale_resolves_ambiguity,
             skip_scale_justification=args.skip_scale_justification,
+            candidate_path=args.candidate_path,
             plan_path=args.plan_path,
+            policy_path=args.policy_path,
             tracker=tracker,
         )
     else:
