@@ -174,3 +174,29 @@ Tarayıcınızda `http://localhost:7860` adresini açarak bir video yükleyebili
 ## 📄 Lisans
 
 Bu proje MIT lisansı altında sunulmaktadır.
+
+
+## 50–100 saatlik large-data fazı
+
+Yeni faz ham videoyu yeniden preprocess etmez; kaynak
+`avsr-tr-ekip/avsr-tr-dataset` üzerindeki hazır mouth clips'tir. Büyük-veri
+araştırması için repo artık:
+
+- immutable Hugging Face dataset revision pinning,
+- deterministic speaker-disjoint train/val/test planı,
+- nested speaker-diverse 10h/25h/50h/100h train stages,
+- mevcut `SequenceBucketSampler` ile duration-aware batching,
+- optimizer/scheduler/scaler/RNG/provenance içeren resumable checkpoint state
+
+sağlar.
+
+Planı üretmek için:
+
+```bash
+python -m src.data.prepare_large_data \
+  --repo-id avsr-tr-ekip/avsr-tr-dataset \
+  --revision <40-hex-HF-dataset-commit-sha>
+```
+
+Komut yalnız hafif manifest metadata'sını kullanır; full training veya ücretli GPU
+işi başlatmaz. Ayrıntılı kurallar `HANDOVER.md` içindedir.
