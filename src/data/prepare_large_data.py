@@ -9,16 +9,12 @@ then creates a speaker-disjoint split and nested speaker-diverse train stages.
 from __future__ import annotations
 
 import argparse
-import csv
 import json
 import pathlib
 import sys
 
 from src.data.hf_downloader import DEFAULT_REPO_ID, HFDatasetDownloader
 from src.data.large_data import build_large_data_plan, write_large_data_plan
-
-
-ROOT = pathlib.Path(__file__).resolve().parent.parent.parent
 
 
 def build_parser() -> argparse.ArgumentParser:
