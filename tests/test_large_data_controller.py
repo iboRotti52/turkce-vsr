@@ -11,6 +11,7 @@ from src.experiments.large_data_controller import (
     ordered_research_scales,
     register_promoted_experiment,
     register_scale_experiment,
+    seal_pre_result_contract,
     validate_promotion_request,
     validate_scale_experiment_plan,
 )
@@ -47,7 +48,13 @@ def _source_record(
         experiment_id="probe_arch_newfamily_10h",
         hypothesis="A different temporal model may scale better than the current Conformer.",
         falsification_criteria="No WER gain or worse long-utterance failures.",
-        setup={"question_id": "ARCH-LD-001"},
+        setup={
+            "question_id": "ARCH-LD-001",
+            "dataset_revision": "a" * 40,
+            "split_map_sha256": "b" * 64,
+            "train_subset_sha256": "1" * 64,
+            "large_data_plan_sha256": "c" * 64,
+        },
         expectation="Better generalization on held-out validation.",
         result={"wer": 0.31},
         status={
@@ -69,7 +76,7 @@ def _source_record(
 
 def _persist_source(tmp_path, source, name="registry.jsonl"):
     tracker = ExperimentTracker(tmp_path / name)
-    tracker.log(source)
+    tracker.log(seal_pre_result_contract(source))
     return tracker
 
 
@@ -363,7 +370,7 @@ def test_scaling_curve_is_candidate_question_and_scale_scoped():
 
 def test_tracker_roundtrips_large_data_agentic_metadata(tmp_path):
     tracker = ExperimentTracker(tmp_path / "registry.jsonl")
-    record = _source_record()
+    record = seal_pre_result_contract(_source_record())
     tracker.log(record)
 
     loaded = tracker.load_all()
@@ -373,6 +380,7 @@ def test_tracker_roundtrips_large_data_agentic_metadata(tmp_path):
     assert loaded[0].minimum_sufficient_scale == "10h"
     assert loaded[0].promotion_rule == record.promotion_rule
     assert loaded[0].estimated_gpu_hours == pytest.approx(1.2)
+    assert len(loaded[0].pre_result_contract_sha256) == 64
 
 
 def test_register_scale_experiment_writes_pre_result_governance(tmp_path):
@@ -690,3 +698,127 @@ def test_validated_promotion_creates_parent_child_registry_chain(tmp_path):
     assert child.data_scale == "25h"
     assert child.technical_status == "IN_PROGRESS"
     assert child.setup["train_subset_sha256"] == "2" * 64
+
+
+def test_pre_result_contract_detects_manual_registry_tampering(tmp_path):
+    tracker = ExperimentTracker(tmp_path / "registry.jsonl")
+    plan = ScaleExperimentPlan(
+        question_id="ARCH-LD-303",
+        candidate_version="c0.5.0",
+        hypothesis="Alternative objective may improve alignment.",
+        requested_scale="10h",
+        minimum_sufficient_scale="10h",
+        falsification_criteria="No WER or alignment gain.",
+        expectation="Lower WER and fewer alignment failures.",
+        information_gain_rationale="10h is sufficient for an initial controlled comparison.",
+        why_smaller_scale_is_insufficient="Smoke cannot measure held-out alignment quality.",
+        promotion_rule="Promote if WER improves >= 3% and alignment failures decrease.",
+        estimated_gpu_hours=1.0,
+        estimated_cost_usd=0.5,
+    )
+    started = register_scale_experiment(
+        plan,
+        tracker=tracker,
+        experiment_id="probe_arch_ld303_10h",
+        large_data_plan=_large_data_plan(),
+        remaining_budget_usd=5.0,
+    )
+
+    import json
+    rows = [
+        json.loads(line)
+        for line in tracker.registry_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    rows[0]["promotion_rule"] = "Tampered easier rule."
+    tracker.registry_path.write_text(
+        "\n".join(json.dumps(row, ensure_ascii=False) for row in rows) + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(RuntimeError, match="Pre-result experiment contract"):
+        complete_scale_experiment(
+            started.experiment_id,
+            tracker=tracker,
+            result={"wer": 0.30},
+            scientific_verdict=ScientificVerdict.ACCEPT,
+            actual_gpu_hours=0.9,
+            actual_cost_usd=0.45,
+            surprise="",
+            updated_belief="Would otherwise look promising.",
+            next_step="Should never be accepted after tampering.",
+        )
+
+
+def test_promotion_cannot_cross_dataset_revision(tmp_path):
+    source = seal_pre_result_contract(_source_record())
+    tracker = ExperimentTracker(tmp_path / "registry.jsonl")
+    tracker.log(source)
+    request = PromotionRequest(
+        question_id="ARCH-LD-001",
+        candidate_version="c0.5.0",
+        from_scale="10h",
+        to_scale="25h",
+        scientific_verdict=ScientificVerdict.ACCEPT,
+        action=ScaleAction.PROMOTE_SCALE,
+        promotion_rule=source.promotion_rule,
+        promotion_rule_met=True,
+        evidence_refs=("registry#source",),
+        estimated_gpu_hours=2.0,
+        estimated_cost_usd=1.0,
+    )
+    different_revision_plan = {
+        **_large_data_plan(),
+        "dataset_revision": "d" * 40,
+    }
+    with pytest.raises(RuntimeError, match="farklı HF dataset revision"):
+        validate_promotion_request(
+            request,
+            tracker=tracker,
+            source_experiment_id=source.experiment_id,
+            large_data_plan=different_revision_plan,
+            remaining_budget_usd=5.0,
+        )
+
+
+def test_promotion_cannot_cross_split_or_source_stage(tmp_path):
+    source = seal_pre_result_contract(_source_record())
+    tracker = ExperimentTracker(tmp_path / "registry.jsonl")
+    tracker.log(source)
+    request = PromotionRequest(
+        question_id="ARCH-LD-001",
+        candidate_version="c0.5.0",
+        from_scale="10h",
+        to_scale="25h",
+        scientific_verdict=ScientificVerdict.ACCEPT,
+        action=ScaleAction.PROMOTE_SCALE,
+        promotion_rule=source.promotion_rule,
+        promotion_rule_met=True,
+        evidence_refs=("registry#source",),
+        estimated_gpu_hours=2.0,
+        estimated_cost_usd=1.0,
+    )
+
+    split_changed = {**_large_data_plan(), "split_map_sha256": "e" * 64}
+    with pytest.raises(RuntimeError, match="farklı split map"):
+        validate_promotion_request(
+            request,
+            tracker=tracker,
+            source_experiment_id=source.experiment_id,
+            large_data_plan=split_changed,
+            remaining_budget_usd=5.0,
+        )
+
+    stage_changed = _large_data_plan()
+    stage_changed["staged_summary"] = {
+        **stage_changed["staged_summary"],
+        "10h": {"sample_ids_sha256": "f" * 64},
+    }
+    with pytest.raises(RuntimeError, match="source-stage"):
+        validate_promotion_request(
+            request,
+            tracker=tracker,
+            source_experiment_id=source.experiment_id,
+            large_data_plan=stage_changed,
+            remaining_budget_usd=5.0,
+        )
