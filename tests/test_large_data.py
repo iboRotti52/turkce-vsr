@@ -7,7 +7,9 @@ from src.data.large_data import (
     build_large_data_plan,
     build_speaker_disjoint_split,
     build_speaker_diverse_training_stages,
+    load_large_data_plan,
     validate_speaker_disjoint_split,
+    verify_large_data_split_file,
 )
 from src.data.large_data_loader import (
     StageDatasetView,
@@ -304,3 +306,39 @@ def test_stage_dataset_view_binds_exact_planned_samples():
 
     with pytest.raises(RuntimeError, match="bulunmayan"):
         StageDatasetView(BaseDataset(), ["missing/000001"])
+
+
+def test_large_data_plan_and_split_tamper_detection(tmp_path):
+    plan = build_large_data_plan(
+        _rows(),
+        dataset_id="avsr-tr-ekip/avsr-tr-dataset",
+        dataset_revision="1" * 40,
+        seed=42,
+        targets_hours=(1.0, 2.0),
+    )
+    plan_path = tmp_path / "large_data_plan.json"
+    from src.data.large_data import write_large_data_plan
+
+    write_large_data_plan(plan_path, plan)
+    loaded = load_large_data_plan(plan_path)
+
+    split_path = tmp_path / "split_map.json"
+    split_path.write_text(
+        json.dumps(plan.split_map, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    verify_large_data_split_file(loaded, split_path)
+
+    tampered = json.loads(plan_path.read_text(encoding="utf-8"))
+    tampered["seed"] = 999
+    plan_path.write_text(json.dumps(tampered), encoding="utf-8")
+    with pytest.raises(RuntimeError, match="plan hash"):
+        load_large_data_plan(plan_path)
+
+    bad_split = dict(plan.split_map)
+    first_key = next(iter(bad_split))
+    bad_split[first_key] = dict(bad_split[first_key])
+    bad_split[first_key]["split"] = "test" if bad_split[first_key]["split"] != "test" else "train"
+    split_path.write_text(json.dumps(bad_split), encoding="utf-8")
+    with pytest.raises(RuntimeError, match="split map drift"):
+        verify_large_data_split_file(loaded, split_path)
