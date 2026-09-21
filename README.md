@@ -214,3 +214,17 @@ ailesine bağlı değildir; kanıt destekliyorsa modelin herhangi bir bileşeni 
 mimari değişebilir. `src/experiments/large_data_controller.py` minimum sufficient
 scale, predeclared promotion rules, GPU-hours/USD ve budget kontrolünü yönetir.
 Scaling behaviour `research/SCALING_ANALYSIS.md` içinde kalıcı kanıt olarak tutulur.
+
+
+### Large-data research workflow CLI
+
+Controller API'lerinin üstünde tek bir fail-closed lifecycle girişi vardır:
+
+```bash
+python -m src.experiments.large_data_workflow --budget-usd 25 status
+```
+
+Ardından `register / complete / fail / promote` alt komutları YAML/JSON spec dosyalarıyla
+kullanılır. CLI training başlatmaz; clean git provenance, candidate recipe hash,
+initializer hash, tek aktif experiment, budget reservation ve scale lineage kurallarını
+uygular. Ayrıntılı kullanım: [docs/LARGE_DATA_WORKFLOW.md](docs/LARGE_DATA_WORKFLOW.md).
