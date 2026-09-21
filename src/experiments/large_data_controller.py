@@ -247,9 +247,74 @@ def register_scale_experiment(
         scale_action=ScaleAction.STOP.value,
         estimated_gpu_hours=experiment.estimated_gpu_hours,
         cost_estimate_usd=experiment.estimated_cost_usd,
+        technical_status="IN_PROGRESS",
     )
     tracker.log(record)
     return record
+
+
+def complete_scale_experiment(
+    record: ExperimentRecord,
+    *,
+    tracker: "ExperimentTracker",
+    result: Mapping[str, Any],
+    scientific_verdict: ScientificVerdict,
+    actual_gpu_hours: float,
+    actual_cost_usd: float,
+    surprise: str,
+    updated_belief: str,
+    next_step: str,
+    scale_action: ScaleAction = ScaleAction.STOP,
+) -> ExperimentRecord:
+    """Persist technical completion separately from the scientific verdict."""
+    from src.experiments.tracker import ExperimentTracker
+
+    if not isinstance(tracker, ExperimentTracker):
+        raise TypeError("tracker ExperimentTracker olmalıdır.")
+    if record.technical_status not in {None, "IN_PROGRESS"}:
+        raise RuntimeError(
+            f"Deney zaten terminal technical_status taşıyor: {record.technical_status}"
+        )
+    if actual_gpu_hours < 0 or actual_cost_usd < 0:
+        raise ValueError("Gerçekleşen GPU-hours/USD negatif olamaz.")
+    if not isinstance(result, Mapping):
+        raise TypeError("result mapping olmalıdır.")
+
+    legacy_status = {
+        ScientificVerdict.ACCEPT: "PASSED",
+        ScientificVerdict.REJECT: "FALSIFIED",
+        ScientificVerdict.INCONCLUSIVE: "INCONCLUSIVE",
+    }[scientific_verdict]
+
+    completed = ExperimentRecord(
+        experiment_id=record.experiment_id,
+        hypothesis=record.hypothesis,
+        falsification_criteria=record.falsification_criteria,
+        setup=dict(record.setup),
+        expectation=record.expectation,
+        timestamp=record.timestamp,
+        result=dict(result),
+        status=legacy_status,
+        surprise=surprise,
+        updated_belief=updated_belief,
+        next_step=next_step,
+        cost_estimate_usd=record.cost_estimate_usd,
+        cost_usd=actual_cost_usd,
+        candidate_version=record.candidate_version,
+        data_scale=record.data_scale,
+        minimum_sufficient_scale=record.minimum_sufficient_scale,
+        evidence_scope=record.evidence_scope,
+        promotion_rule=record.promotion_rule,
+        scale_action=scale_action.value,
+        scale_parent_experiment_id=record.scale_parent_experiment_id,
+        estimated_gpu_hours=record.estimated_gpu_hours,
+        actual_gpu_hours=actual_gpu_hours,
+        technical_status="COMPLETED",
+        scientific_verdict=scientific_verdict.value,
+        extra_fields=dict(record.extra_fields),
+    )
+    tracker.log(completed)
+    return completed
 
 
 def _next_scale(scales: Sequence[str], current: str) -> Optional[str]:
@@ -288,6 +353,12 @@ def validate_promotion_request(
         raise ValueError("Promotion source experiment farklı candidate_version'a ait.")
     if source.get("data_scale") != request.from_scale:
         raise ValueError("Promotion from_scale source experiment ile uyuşmuyor.")
+    if source.get("technical_status") != "COMPLETED":
+        raise RuntimeError("Tamamlanmamış deney scale promotion kaynağı olamaz.")
+    if source.get("scientific_verdict") != request.scientific_verdict.value:
+        raise RuntimeError(
+            "Promotion request scientific verdict source registry kaydıyla uyuşmuyor."
+        )
     predeclared_rule = str(source.get("promotion_rule") or "").strip()
     if not predeclared_rule:
         raise RuntimeError("Source experiment önceden promotion_rule kaydetmemiş.")
