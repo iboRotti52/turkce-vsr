@@ -73,6 +73,7 @@ Thumbs.db
 # Master dataset from S3
 data/master/*
 data/iborotti/*
+data/large_data/*
 
 # Hugging Face cache & downloads
 .cache/
