@@ -40,7 +40,7 @@ EOF
 ```
 
 Zorunlu adımlar (atlama):
-1. Yeni veri için **konuşmacı-ayrık split'i sıfırdan kur** (`split_map_iborotti.json` yalnız eski 15 videoyu kapsar — yeni konuşmacıları eski split'e karıştırma, sızıntı olur).
+1. Yeni veri için **identity-group-disjoint split'i sıfırdan kur** (`speaker_id`/`speaker` tercih edilir; yalnız `channel` varsa bunun proxy olduğunu audit et). `split_map_iborotti.json` yalnız eski 15 videoyu kapsar — yeni veriye taşıma.
 2. Yeni candidate sürümü aç (c0.5.0): eski `c0.4.0` reçeteyi başlangıç noktası al, veri/split hash'lerini, seed'i, initializer kökenini her checkpoint'e yaz (`GEMINI.md` §5D).
 3. Curriculum'u koru: `<=3.5s -> <=6s -> <=8s` (blank collapse kırıcı, D4/D6/D8).
 4. Decoder: Greedy `blank_penalty=1.2` + kalibre beam; KWS spotter `BP=1.2, conf=0.15` (D11/D14/D15).
