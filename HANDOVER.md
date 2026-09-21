@@ -56,3 +56,45 @@ Zorunlu adımlar (atlama):
   Manuel çalışıyorsan en az `turkish-lip-reading` runbook'unu oku (visem haritası, 25 FPS, 96x96 ROI, CTC 31 token).
 - Otonom araştırma protokolü: `GEMINI.md`. Tek yaşayan model kuralı geçerli — paralel pilot modeller açma,
   her probe'u tek soruya bağla ve `ACCEPT/REJECT/INCONCLUSIVE` kaydet.
+
+
+## 4. Large-data araştırma hazırlığı
+
+50–100 saatlik fazda ham video preprocessing eklenmez; Hugging Face'teki preprocessed
+mouth clips kaynak kabul edilir. Fakat **`main`/latest revision ile araştırma koşulmaz**.
+Önce immutable HF dataset commit SHA sabitlenir ve yalnız manifest metadata'sı üzerinden
+yeni split/stage planı hazırlanır:
+
+```bash
+.venv/bin/python -m src.data.prepare_large_data \
+  --repo-id avsr-tr-ekip/avsr-tr-dataset \
+  --revision <40-hex-HF-dataset-commit-sha>
+```
+
+Bu komut full dataset'i veya GPU eğitimini başlatmaz. Şunları üretir:
+
+- `research/large_data_plan.json`: dataset revision, split/stage özetleri ve hash'ler.
+- `data/metadata/split_map_large_data.json`: sıfırdan üretilmiş speaker-disjoint split.
+- Train içinde mümkün olduğu kadar speaker-diverse ve **nested** 10h → 25h → 50h →
+  100h aşamaları (mevcut train süresi hedefe yetmiyorsa o aşama üretilmez; `full`
+  her zaman gerçek kullanılabilir train kümesini temsil eder).
+
+Large-data candidate `c0.5.0`, bu plan üretildikten ve audit edildikten sonra açılır.
+`c0.4.0` dosyaları historical frozen evidence olarak kalır; onları yeni dataset'e
+uyarlayarak üzerine yazma.
+
+### Large-data training kuralları
+
+- Research/selection yalnız train + speaker-disjoint validation kullanır; test split
+  araştırma sırasında indirilmez/değerlendirilmez.
+- Her hipotezi doğrudan 50–100 saatte koşma. En ucuz speaker-diverse stage'de başla;
+  yalnız önceden yazılmış karar kuralı geçerse daha büyük stage'e ölçekle.
+- `SequenceBucketSampler` ile duration-aware batching kullan; 50–100 saat için tüm
+  videoları RAM'e preload etme.
+- Uzun koşuların checkpoint'i model dışında optimizer, scheduler, AMP scaler, epoch,
+  global step, sampler epoch, RNG state ve provenance taşımalıdır
+  (`src/training_state.py`).
+- Resume sırasında dataset id/revision, split hash, code revision veya candidate
+  version değişmişse fail-closed dur; farklı koşuyu aynı run gibi sürdürme.
+- Full training ancak yeni veri rejiminde readiness kapıları yeniden geçilip yeni
+  candidate recipe dondurulduktan sonra başlatılabilir.
