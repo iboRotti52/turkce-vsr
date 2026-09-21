@@ -134,6 +134,8 @@ modeli mümkün olan en iyi hale getirmek**.
 - Scaling curves `research/SCALING_ANALYSIS.md` içinde raw outputs ve subgroup
   failures ile birlikte kalıcı kanıt olarak tutulur.
 - Large-data deneyini çalıştırmadan önce `register_scale_experiment(...)` ile
-  pre-result registry kaydı oluştur.
+  pre-result registry kaydı oluştur. Koşu bitince `complete_scale_experiment(...)`
+  ile technical completion, scientific verdict, actual GPU-hours/USD ve scale action'ı
+  ayrı kaydet; "çalıştı" ile "hipotez kabul edildi"yi aynı şey sayma.
 
 Programatik policy: `src/experiments/large_data_controller.py`.
