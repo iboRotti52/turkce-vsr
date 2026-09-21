@@ -326,7 +326,11 @@ Her large-data deneyi başlamadan önce registry'de en az şunları kaydet:
 - `information_gain_rationale`,
 - **sonuç görülmeden yazılmış promotion rule**,
 - estimated GPU-hours ve estimated USD,
-- planın exact sample-stage hash'i ve normal provenance.
+- planın exact sample-stage hash'i,
+- `code_revision`, `candidate_recipe_sha256`, seed ve initializer ID + SHA-256.
+
+Registration bu alanlardan `pre_result_contract_sha256` üretir. Sonuç görülmeden
+sabitlenmesi gereken metadata elle değişirse completion/promotion fail-closed durur.
 
 Scale sırası gerçek `large_data_plan.json` içindeki mevcut aşamalardan türetilir:
 `smoke → 10h → 25h → 50h → 100h → full-data` benzeri. Dataset hedeflerden birine
@@ -342,9 +346,16 @@ Promotion kuralları:
    scale'in neden ayıracağı açıklanabiliyorsa promotion yapılabilir.
 6. `REJECT` edilen aynı hipotez daha pahalı scale'e promote edilmez.
 7. Ara stage atlanıyorsa ayrıca gerekçe gerekir.
-8. Promotion öncesi kalan bütçe, estimated GPU-hours ve estimated USD kontrol edilir.
-9. Deney bitince actual GPU-hours ve actual USD kaydedilir.
-10. Full-data **research run** ile `FULL_TRAINING` durumunu karıştırma. Araştırma sırasında
+8. Promotion kaynağı aynı HF dataset revision, split map ve source-stage sample hash'ine
+   ait olmalıdır; başka snapshot'a sessiz promotion yapılamaz.
+9. Aynı source experiment yalnız bir kez promote edilebilir. Parent→child registry
+   güncellemesi atomik yapılır.
+10. Child scale run başlamadan **onun bir sonraki scale'e geçiş rule'u** da yazılır;
+    sonuç görüldükten sonra rule üretilemez. Son mevcut scale için bu gerekmez.
+11. Promotion öncesi kalan bütçe, estimated GPU-hours ve estimated USD kontrol edilir.
+12. Deney bitince actual GPU-hours ve actual USD kaydedilir. Teknik job hata verirse
+    `technical_status=ERROR` ile kapat; bilimsel verdict uydurma.
+13. Full-data **research run** ile `FULL_TRAINING` durumunu karıştırma. Araştırma sırasında
     full-data stage yalnız bilimsel soru bunu gerçekten gerektiriyorsa kullanılabilir;
     production/final full training yine readiness kapısına tabidir.
 
