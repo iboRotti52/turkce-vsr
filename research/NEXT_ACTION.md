@@ -34,3 +34,45 @@ kararıyla yapılır.
 
 
 
+
+
+## Large-data fazına geçişte sonraki gerçek adım
+
+`c0.4.0` historical small-data sonucu değişmeden kalır. Yeni veri gerçekten
+50–100 saat ölçeğine ulaştığında ilk adım eğitim başlatmak değil, HF snapshot'ını
+immutable revision ile sabitleyip yeni identity-group-disjoint planı üretmektir (`channel`
+yalnız speaker proxy ise bunu ayrıca audit et):
+
+```bash
+.venv/bin/python -m src.data.prepare_large_data \
+  --repo-id avsr-tr-ekip/avsr-tr-dataset \
+  --revision <40-hex-HF-dataset-commit-sha>
+```
+
+Çıktıdaki speaker/süre dağılımını ve leakage kontrollerini incele. Plan kabul edilince
+yeni yaşayan candidate `c0.5.0 / RESEARCHING` aç; `c0.4.0` mimari/reçetesini
+başlangıç prior'ı olarak taşı ancak veri-miktarına duyarlı kararları yeniden aç.
+İlk probe'u mümkün olan en küçük speaker-diverse stage'de yap. Test splitini candidate
+dondurulana kadar araştırma kararlarına açma.
+
+
+## Agentic large-data başlangıç adımı
+
+HF snapshot planı audit edilip `c0.5.0 / RESEARCHING` açıldıktan sonra ilk pahalı
+deneyi doğrudan çalıştırma. Önce:
+
+1. Tüm mevcut kanıtı yeniden uzlaştır: D1–D23, failures, raw outputs, literature ve
+   yeni dataset/scaling bilgisi.
+2. En yüksek bilgi değerli **tek** model sorusunu seç; mevcut Conformer/CTC ailesiyle
+   sınırlanma.
+3. `ScaleExperimentPlan` ile minimum sufficient scale, falsification criteria,
+   information-gain rationale, predeclared promotion rule ve estimated GPU-hours/USD yaz.
+4. `register_scale_experiment(...)` ile sonuç görülmeden `IN_PROGRESS` registry
+   kaydını oluştur.
+5. Sonucu raw outputs + subgroup failures ile incele; bilimsel verdict'i
+   `ACCEPT/REJECT/INCONCLUSIVE`, scale action'ını ayrıca kaydet.
+6. Scale promotion gerekiyorsa `validate_promotion_request(...)` ile source registry
+   kaydındaki önceden yazılmış rule'a karşı doğrula.
+7. Her scale sonucu sonrası `research/SCALING_ANALYSIS.md` dosyasını güncelle.
+
+**Large-data scaling policy constrains experiment cost, not scientific search space.**

@@ -139,7 +139,7 @@ python scripts/build_dataset_manifest.py
 ### 3. Birim Testlerini Çalıştırma
 
 ```bash
-.venv/bin/python -m pytest -q   # beklenen: 105 passed, 8 skipped (skip'ler: local veri yokluğu)
+.venv/bin/python -m pytest -q   # CI'da suite geçmeli; local-veriye bağlı testler skip olabilir
 ```
 
 ### 4. Full-Training Preflight (ücretli işlem başlatmaz)
@@ -174,3 +174,43 @@ Tarayıcınızda `http://localhost:7860` adresini açarak bir video yükleyebili
 ## 📄 Lisans
 
 Bu proje MIT lisansı altında sunulmaktadır.
+
+
+## 50–100 saatlik large-data fazı
+
+Yeni faz ham videoyu yeniden preprocess etmez; kaynak
+`avsr-tr-ekip/avsr-tr-dataset` üzerindeki hazır mouth clips'tir. Büyük-veri
+araştırması için repo artık:
+
+- immutable Hugging Face dataset revision pinning,
+- deterministic speaker/group-disjoint train/val/test planı (`channel` kullanılıyorsa proxy olarak açıkça işaretlenir),
+- nested speaker-diverse 10h/25h/50h/100h train stages,
+- mevcut `SequenceBucketSampler` ile duration-aware batching,
+- optimizer/scheduler/scaler/RNG/provenance içeren resumable checkpoint state
+
+sağlar.
+
+Planı üretmek için:
+
+```bash
+python -m src.data.prepare_large_data \
+  --repo-id avsr-tr-ekip/avsr-tr-dataset \
+  --revision <40-hex-HF-dataset-commit-sha>
+```
+
+Komut yalnız hafif manifest metadata'sını kullanır; full training veya ücretli GPU
+işi başlatmaz. Ayrıntılı kurallar `HANDOVER.md` içindedir.
+
+
+### Agentic research on large data
+
+Büyük veri fazında model araştırma zekâsı korunur; yalnız deney maliyeti/ölçeği için
+ayrı controller eklenir. Temel invariant:
+
+> **Large-data scaling policy constrains experiment cost, not scientific search space.**
+
+`c0.4.0` bir small-data prior'ıdır. Gelecek candidate'lar mevcut Conformer/CTC
+ailesine bağlı değildir; kanıt destekliyorsa modelin herhangi bir bileşeni veya tüm
+mimari değişebilir. `src/experiments/large_data_controller.py` minimum sufficient
+scale, predeclared promotion rules, GPU-hours/USD ve budget kontrolünü yönetir.
+Scaling behaviour `research/SCALING_ANALYSIS.md` içinde kalıcı kanıt olarak tutulur.

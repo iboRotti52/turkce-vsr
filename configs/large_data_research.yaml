@@ -1,0 +1,151 @@
+schema_version: 1
+phase: large_data_research
+candidate_version: c0.5.0
+candidate_status: not_opened_until_dataset_plan_is_audited
+
+data:
+  source: avsr-tr-ekip/avsr-tr-dataset
+  representation: preprocessed_mouth_clips
+  raw_video_preprocessing_in_scope: false
+  revision_policy: immutable_40_hex_hf_commit_required
+  speaker_identity:
+    preferred_fields: [speaker_id, speaker]
+    fallback_proxy_fields: [channel, creator, source_channel]
+    mixed_identity_fields_allowed: false
+    proxy_requires_human_audit: true
+  split_policy:
+    speaker_or_proxy_group_disjoint: true
+    regenerate_from_new_manifest: true
+    reuse_c0_4_split: false
+    val_fraction: 0.10
+    test_fraction: 0.10
+    seed: 42
+  test_quarantine:
+    research_selection_uses_test: false
+    release_condition: candidate_frozen_or_explicit_final_evaluation
+
+scaling:
+  strategy: nested_speaker_diverse_stages
+  target_train_hours: [10, 25, 50, 100]
+  missing_target_policy: omit_if_train_data_is_smaller
+  full_stage_always_present: true
+  promote_only_after_predeclared_decision_rule: true
+
+loader:
+  cache_all_videos_in_ram: false
+  duration_aware_batching: true
+  sampler: SequenceBucketSampler
+  buckets_seconds:
+    - [0.0, 3.5, 8]
+    - [3.5, 8.0, 6]
+    - [8.0, 100.0, 2]
+  worker_policy: tune_on_training_host
+  persistent_workers_when_workers_gt_zero: true
+  pin_memory_on_cuda: true
+  call_sampler_set_epoch_each_epoch: true
+
+checkpointing:
+  resumable: true
+  resume_granularity: epoch_boundary
+  exact_worker_augmentation_replay_after_crash: false
+  required_state:
+    - model_state_dict
+    - optimizer_state_dict
+    - scheduler_state_dict
+    - scaler_state_dict
+    - epoch
+    - global_step
+    - sampler_epoch
+    - rng_state
+    - provenance
+  immutable_resume_provenance:
+    - dataset_id
+    - dataset_revision
+    - split_map_sha256
+    - train_subset_sha256
+    - candidate_recipe_sha256
+    - code_revision
+    - candidate_version
+    - seed
+    - initializer_id
+    - initializer_sha256
+
+research:
+  starting_prior: c0.4.0
+  copy_small_data_results_as_frozen_evidence: true
+  blindly_inherit_data_sensitive_decisions: false
+  first_action: prepare_and_audit_large_data_plan
+  full_training_authorized: false
+
+
+scientific_search:
+  invariant: large_data_scaling_policy_constrains_cost_not_scientific_search_space
+  current_candidate_is_belief_snapshot_not_architecture_family: true
+  architecture_whitelist: null
+  architecture_blacklist: null
+  may_replace_current_components_when_evidence_supports_it: true
+  evidence_sources:
+    - prior_decisions
+    - failed_experiments
+    - raw_predictions
+    - failure_analysis
+    - scaling_curves
+    - subgroup_failures
+    - primary_literature
+    - official_implementations
+    - adjacent_methods
+  evidence_scope_required_for_new_decisions: true
+  allowed_evidence_scopes:
+    - mechanism_general
+    - small_data_regime
+    - large_data_regime
+    - dataset_revision_specific
+    - scale_specific
+  revalidation_trigger_required_for_non_general_evidence: true
+
+agentic_experiment_controller:
+  controller: src.experiments.large_data_controller
+  persistent_scaling_memory: research/SCALING_ANALYSIS.md
+  first_run_policy:
+    choose_minimum_sufficient_scale: true
+    skipping_smaller_scale_requires_reason: true
+    non_smoke_run_requires_predeclared_promotion_rule: true
+  outcomes:
+    technical_status_separate_from_scientific_verdict: true
+    technical_terminal_states: [COMPLETED, ERROR]
+    technical_error_has_no_scientific_verdict: true
+    registry_governance_reads_are_strict: true
+    scientific_verdicts: [ACCEPT, REJECT, INCONCLUSIVE]
+    scale_actions: [STOP, RETEST_SAME_SCALE, PROMOTE_SCALE]
+  promotion:
+    rule_must_be_recorded_before_result: true
+    accept_requires_rule_met: true
+    reject_cannot_promote_same_hypothesis: true
+    inconclusive_does_not_automatically_promote: true
+    inconclusive_may_promote_only_if_ambiguity_is_scale_sensitive: true
+    skipping_intermediate_scale_requires_reason: true
+    source_dataset_revision_split_and_stage_must_match: true
+    source_can_promote_only_once: true
+    promoted_child_next_rule_predeclared_before_run: true
+    parent_child_registry_update_atomic: true
+  cost_tracking:
+    required_before_run:
+      - estimated_gpu_hours
+      - estimated_cost_usd
+      - information_gain_rationale
+      - code_revision
+      - candidate_recipe_sha256
+      - seed
+      - initializer_id
+      - initializer_sha256
+      - pre_result_contract_sha256
+    required_after_run:
+      - actual_gpu_hours
+      - actual_cost_usd
+    hard_budget_check_before_promotion: true
+  scaling_behavior:
+    treat_as_research_evidence: true
+    compare_same_question_candidate_and_metric_only: true
+    inspect_with_raw_outputs_and_subgroups: true
+    do_not_infer_causality_from_curve_alone: true
+  full_data_research_is_not_full_training: true

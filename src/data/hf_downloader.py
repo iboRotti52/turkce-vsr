@@ -40,20 +40,51 @@ class HFDatasetDownloader:
         split_map_path: Optional[Union[str, pathlib.Path]] = None,
         hf_token: Optional[str] = None,
         max_local_gb: float = DEFAULT_MAX_LOCAL_GB,
+        revision: Optional[str] = None,
+        require_pinned_revision: bool = False,
     ):
         self.repo_id = repo_id
+        self.revision = revision
+        if require_pinned_revision:
+            normalized = (revision or "").strip().lower()
+            if len(normalized) != 40 or any(ch not in "0123456789abcdef" for ch in normalized):
+                raise ValueError(
+                    "Large-data araştırması immutable 40-hex Hugging Face commit revision gerektirir; "
+                    f"verilen revision={revision!r}"
+                )
+            self.revision = normalized
         self.target_dir = pathlib.Path(target_dir) if target_dir else DEFAULT_TARGET_DIR
-        self.split_map_path = pathlib.Path(split_map_path) if split_map_path else DEFAULT_SPLIT_MAP
+        # A pinned large-data snapshot must never silently inherit the historical
+        # c0.4.0 split map. Research callers must pass the generated large-data map.
+        if split_map_path is not None:
+            self.split_map_path: Optional[pathlib.Path] = pathlib.Path(split_map_path)
+        elif self.revision:
+            self.split_map_path = None
+        else:
+            self.split_map_path = DEFAULT_SPLIT_MAP
         self.hf_token = hf_token or os.environ.get("HF_TOKEN") or None
         self.max_local_gb = max_local_gb
 
-        self.manifest_dir = self.target_dir / "manifests"
-        self.clips_dir = self.target_dir / "clips"
+        # Pinned snapshots must never share mutable local cache paths. Otherwise
+        # a second revision could silently reuse accepted.csv/clips from an older run.
+        self.data_dir = (
+            self.target_dir / "_revisions" / self.revision
+            if self.revision
+            else self.target_dir
+        )
+        self.manifest_dir = self.data_dir / "manifests"
+        self.clips_dir = self.data_dir / "clips"
         self._split_map: Optional[Dict[str, Any]] = None
 
     def _get_split_map(self) -> Dict[str, Any]:
         if self._split_map is not None:
             return self._split_map
+
+        if self.split_map_path is None:
+            raise FileNotFoundError(
+                "Pinned large-data revision için split map açıkça verilmelidir; "
+                "önce src.data.prepare_large_data ile split_map_large_data.json üretin."
+            )
 
         if self.split_map_path.exists():
             with open(self.split_map_path, "r", encoding="utf-8") as f:
@@ -90,6 +121,7 @@ class HFDatasetDownloader:
                         filename=hf_path,
                         repo_type="dataset",
                         token=self.hf_token,
+                        revision=self.revision,
                     )
                     import shutil
                     shutil.copyfile(downloaded, dest_file)
@@ -97,7 +129,8 @@ class HFDatasetDownloader:
         except Exception as e:
             # 2. Yedek Yöntem: Doğrudan raw HTTP
             print(f"huggingface_hub indirme uyarısı, raw HTTP deneniyor: {e}", file=sys.stderr)
-            base_raw = f"https://huggingface.co/datasets/{self.repo_id}/raw/main/data/iborotti/manifests"
+            revision = self.revision or "main"
+            base_raw = f"https://huggingface.co/datasets/{self.repo_id}/resolve/{revision}/data/iborotti/manifests"
             for fname in ["accepted.csv", "all.csv"]:
                 dest_file = self.manifest_dir / fname
                 if not dest_file.exists() or dest_file.stat().st_size == 0:
@@ -130,7 +163,7 @@ class HFDatasetDownloader:
         Yerel diski korur (< 10 MB).
         """
         manifest = self.read_accepted_manifest()
-        split_map = self._get_split_map()
+        split_map = self._get_split_map() if split else {}
 
         filtered_rows = []
         video_counts: Dict[str, int] = {}
@@ -181,13 +214,15 @@ class HFDatasetDownloader:
                         filename=hf_rel,
                         repo_type="dataset",
                         token=self.hf_token,
+                        revision=self.revision,
                     )
                     import shutil
                     shutil.copyfile(cached_p, target_f)
                 except Exception as ex:
                     # Alternatif raw indirme
                     try:
-                        raw_url = f"https://huggingface.co/datasets/{self.repo_id}/resolve/main/{hf_rel}"
+                        revision = self.revision or "main"
+                        raw_url = f"https://huggingface.co/datasets/{self.repo_id}/resolve/{revision}/{hf_rel}"
                         req = urllib.request.Request(raw_url, headers={"User-Agent": "AVSR-TR-Client"})
                         with urllib.request.urlopen(req) as resp, open(target_f, "wb") as out:
                             out.write(resp.read())
@@ -208,7 +243,7 @@ class HFDatasetDownloader:
         try:
             from huggingface_hub import HfApi
             api = HfApi(token=self.hf_token)
-            info = api.dataset_info(self.repo_id, files_metadata=True)
+            info = api.dataset_info(self.repo_id, revision=self.revision, files_metadata=True)
             total_bytes = sum(f.size for f in info.siblings if f.size is not None)
             return total_bytes / (1024 ** 3)
         except Exception as e:
@@ -234,11 +269,40 @@ class HFDatasetDownloader:
                 )
 
         from huggingface_hub import snapshot_download
-        print(f"🚀 [HF FULL SYNC] '{self.repo_id}' deposu '{self.target_dir}' dizinine indiriliyor...")
+        print(
+            f"🚀 [HF FULL SYNC] '{self.repo_id}' revision={self.revision or 'main'} "
+            f"deposu '{self.target_dir}' dizinine indiriliyor..."
+        )
 
         patterns = allow_patterns or ["data/iborotti/*"]
 
-        # Doğrudan target_dir içine indirme (çift kopyalamayı ve disk şişmesini önler)
+        # Immutable revisions get their own local directory so two research
+        # snapshots can never overwrite/reuse one another.
+        if self.revision:
+            cache_dir = snapshot_download(
+                repo_id=self.repo_id,
+                repo_type="dataset",
+                allow_patterns=patterns,
+                token=self.hf_token,
+                revision=self.revision,
+            )
+            import shutil
+            src_inner = pathlib.Path(cache_dir) / "data" / "iborotti"
+            if not src_inner.exists():
+                raise FileNotFoundError(
+                    f"HF snapshot beklenen data/iborotti yapısını içermiyor: {src_inner}"
+                )
+            self.data_dir.mkdir(parents=True, exist_ok=True)
+            for child in src_inner.iterdir():
+                dest_child = self.data_dir / child.name
+                if child.is_dir():
+                    shutil.copytree(child, dest_child, dirs_exist_ok=True)
+                else:
+                    shutil.copyfile(child, dest_child)
+            print(f"✅ Pinned tam indirme tamamlandı: {self.data_dir}")
+            return self.data_dir
+
+        # Unpinned legacy/local behavior is preserved for historical tooling.
         if self.target_dir.name == "iborotti" and self.target_dir.parent.name == "data":
             root_dir = self.target_dir.parent.parent
             snapshot_download(
@@ -246,6 +310,7 @@ class HFDatasetDownloader:
                 repo_type="dataset",
                 allow_patterns=patterns,
                 token=self.hf_token,
+                revision=self.revision,
                 local_dir=str(root_dir),
             )
         else:
@@ -254,6 +319,7 @@ class HFDatasetDownloader:
                 repo_type="dataset",
                 allow_patterns=patterns,
                 token=self.hf_token,
+                revision=self.revision,
             )
             import shutil
             src_inner = pathlib.Path(cache_dir) / "data" / "iborotti"
@@ -273,7 +339,7 @@ class HFDatasetDownloader:
         """
         Yerel diskte halihazırda bulunan geçerli klipleri döndürür.
         """
-        split_map = self._get_split_map()
+        split_map = self._get_split_map() if split else {}
         available = []
         if not self.clips_dir.exists():
             return available
