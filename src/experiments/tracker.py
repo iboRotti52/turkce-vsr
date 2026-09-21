@@ -41,6 +41,7 @@ class ExperimentRecord:
     technical_status: Optional[str] = None
     scientific_verdict: Optional[str] = None
     pre_result_contract_sha256: Optional[str] = None
+    revalidation_trigger: Optional[str] = None
     extra_fields: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -62,6 +63,7 @@ class ExperimentRecord:
             "technical_status",
             "scientific_verdict",
             "pre_result_contract_sha256",
+            "revalidation_trigger",
         )
         for key in optional_fields:
             if d.get(key) is None:
