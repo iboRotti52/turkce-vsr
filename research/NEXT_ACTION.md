@@ -40,7 +40,8 @@ kararıyla yapılır.
 
 `c0.4.0` historical small-data sonucu değişmeden kalır. Yeni veri gerçekten
 50–100 saat ölçeğine ulaştığında ilk adım eğitim başlatmak değil, HF snapshot'ını
-immutable revision ile sabitleyip yeni speaker-disjoint planı üretmektir:
+immutable revision ile sabitleyip yeni identity-group-disjoint planı üretmektir (`channel`
+yalnız speaker proxy ise bunu ayrıca audit et):
 
 ```bash
 .venv/bin/python -m src.data.prepare_large_data \
