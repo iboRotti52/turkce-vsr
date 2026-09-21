@@ -193,10 +193,15 @@ def _next_scale(scales: Sequence[str], current: str) -> Optional[str]:
 def validate_promotion_request(
     request: PromotionRequest,
     *,
+    source_experiment: ExperimentRecord,
     large_data_plan: Mapping[str, Any],
     remaining_budget_usd: float,
 ) -> None:
-    """Fail-closed validation for spending more data/compute on the same question."""
+    """Fail-closed validation for spending more data/compute on the same question.
+
+    Promotion policy is bound to the source registry record so the rule cannot
+    be invented after seeing the result.
+    """
     for label, value in (
         ("question_id", request.question_id),
         ("candidate_version", request.candidate_version),
@@ -205,6 +210,20 @@ def validate_promotion_request(
         ("promotion_rule", request.promotion_rule),
     ):
         _require_nonempty(label, value)
+
+    source = source_experiment.to_dict()
+    source_setup = source.get("setup") or {}
+    if source_setup.get("question_id") != request.question_id:
+        raise ValueError("Promotion source experiment farklı research question'a ait.")
+    if source.get("candidate_version") != request.candidate_version:
+        raise ValueError("Promotion source experiment farklı candidate_version'a ait.")
+    if source.get("data_scale") != request.from_scale:
+        raise ValueError("Promotion from_scale source experiment ile uyuşmuyor.")
+    predeclared_rule = str(source.get("promotion_rule") or "").strip()
+    if not predeclared_rule:
+        raise RuntimeError("Source experiment önceden promotion_rule kaydetmemiş.")
+    if predeclared_rule != request.promotion_rule.strip():
+        raise RuntimeError("Promotion rule sonuç görüldükten sonra değiştirilemez.")
 
     _require_nonnegative_cost(request.estimated_gpu_hours, request.estimated_cost_usd)
     if request.estimated_cost_usd > remaining_budget_usd:
