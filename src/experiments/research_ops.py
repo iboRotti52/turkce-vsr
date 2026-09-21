@@ -95,13 +95,16 @@ def evaluate_research_session(
 
     candidate = load_candidate(candidate_path)
     policy = _load_policy(policy_path)
-    expected_candidate = str(policy.get("candidate_version") or "").strip()
+    starting_prior = str(
+        ((policy.get("research") or {}).get("starting_prior")) or ""
+    ).strip()
     expected_source = str(((policy.get("data") or {}).get("source")) or "").strip()
 
-    if candidate.candidate_version != expected_candidate:
-        blockers.append(
-            f"candidate_version_mismatch:{candidate.candidate_version}!={expected_candidate}"
-        )
+    # The policy may name c0.5.0 as the first large-data candidate, but future
+    # c0.5.1/c0.6.x belief snapshots must remain valid. Only the frozen small-data
+    # prior is blocked from pretending to be an active large-data candidate.
+    if starting_prior and candidate.candidate_version == starting_prior:
+        blockers.append(f"large_data_candidate_not_opened:{starting_prior}")
 
     if candidate.stage not in {
         ResearchStage.RESEARCHING,
