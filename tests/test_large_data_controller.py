@@ -9,6 +9,7 @@ from src.experiments.large_data_controller import (
     build_scaling_curve,
     complete_scale_experiment,
     ordered_research_scales,
+    register_promoted_experiment,
     register_scale_experiment,
     validate_promotion_request,
     validate_scale_experiment_plan,
@@ -18,12 +19,21 @@ from src.experiments.tracker import ExperimentRecord, ExperimentTracker
 
 def _large_data_plan():
     return {
+        "dataset_revision": "a" * 40,
+        "split_map_sha256": "b" * 64,
+        "plan_sha256": "c" * 64,
         "staged_subsets": {
             "10h": ["a"],
             "25h": ["a", "b"],
             "50h": ["a", "b", "c"],
             "full": ["a", "b", "c", "d"],
-        }
+        },
+        "staged_summary": {
+            "10h": {"sample_ids_sha256": "1" * 64},
+            "25h": {"sample_ids_sha256": "2" * 64},
+            "50h": {"sample_ids_sha256": "3" * 64},
+            "full": {"sample_ids_sha256": "4" * 64},
+        },
     }
 
 
@@ -382,12 +392,7 @@ def test_register_scale_experiment_writes_pre_result_governance(tmp_path):
         estimated_gpu_hours=1.5,
         estimated_cost_usd=0.9,
     )
-    large_plan = {
-        **_large_data_plan(),
-        "dataset_revision": "a" * 40,
-        "split_map_sha256": "b" * 64,
-        "staged_summary": {"10h": {"sample_ids_sha256": "c" * 64}},
-    }
+    large_plan = _large_data_plan()
 
     record = register_scale_experiment(
         plan,
@@ -401,7 +406,7 @@ def test_register_scale_experiment_writes_pre_result_governance(tmp_path):
     assert record.status == "IN_PROGRESS"
     assert record.data_scale == "10h"
     assert record.promotion_rule == plan.promotion_rule
-    assert record.setup["train_subset_sha256"] == "c" * 64
+    assert record.setup["train_subset_sha256"] == "1" * 64
     assert record.setup["dataset_revision"] == "a" * 40
     loaded = tracker.load_all()[0]
     assert loaded.promotion_rule == plan.promotion_rule
@@ -581,3 +586,107 @@ def test_scaling_curve_does_not_mix_dataset_revisions():
     assert [(p.experiment_id, p.value) for p in curve] == [
         ("old_revision", 0.30)
     ]
+
+
+def test_completion_cannot_claim_unvalidated_promotion(tmp_path):
+    tracker = ExperimentTracker(tmp_path / "registry.jsonl")
+    plan = ScaleExperimentPlan(
+        question_id="ARCH-LD-201",
+        candidate_version="c0.5.0",
+        hypothesis="Test architecture A.",
+        requested_scale="10h",
+        minimum_sufficient_scale="10h",
+        falsification_criteria="No WER gain.",
+        expectation="Lower WER.",
+        information_gain_rationale="10h is sufficient for initial discrimination.",
+        why_smaller_scale_is_insufficient="Smoke cannot estimate held-out WER.",
+        promotion_rule="Promote if WER improves >= 3%.",
+        estimated_gpu_hours=1.0,
+        estimated_cost_usd=0.5,
+    )
+    started = register_scale_experiment(
+        plan,
+        tracker=tracker,
+        experiment_id="probe_arch_ld201_10h",
+        large_data_plan=_large_data_plan(),
+        remaining_budget_usd=5.0,
+    )
+    with pytest.raises(ValueError, match="register_promoted_experiment"):
+        complete_scale_experiment(
+            started.experiment_id,
+            tracker=tracker,
+            result={"wer": 0.30},
+            scientific_verdict=ScientificVerdict.ACCEPT,
+            actual_gpu_hours=0.9,
+            actual_cost_usd=0.45,
+            surprise="",
+            updated_belief="Architecture A looks promising.",
+            next_step="Consider promotion.",
+            scale_action=ScaleAction.PROMOTE_SCALE,
+        )
+
+
+def test_validated_promotion_creates_parent_child_registry_chain(tmp_path):
+    tracker = ExperimentTracker(tmp_path / "registry.jsonl")
+    plan = ScaleExperimentPlan(
+        question_id="ARCH-LD-202",
+        candidate_version="c0.5.0",
+        hypothesis="Alternative temporal encoder may scale better.",
+        requested_scale="10h",
+        minimum_sufficient_scale="10h",
+        falsification_criteria="No WER improvement or worse long-bucket WER.",
+        expectation="Lower WER without subgroup collapse.",
+        information_gain_rationale="10h can discriminate initial generalization.",
+        why_smaller_scale_is_insufficient="Smoke cannot estimate speaker-disjoint WER.",
+        promotion_rule="Promote if WER improves >= 3% and no subgroup regresses.",
+        estimated_gpu_hours=1.0,
+        estimated_cost_usd=0.5,
+    )
+    started = register_scale_experiment(
+        plan,
+        tracker=tracker,
+        experiment_id="probe_arch_ld202_10h",
+        large_data_plan=_large_data_plan(),
+        remaining_budget_usd=5.0,
+    )
+    completed = complete_scale_experiment(
+        started.experiment_id,
+        tracker=tracker,
+        result={"wer": 0.28},
+        scientific_verdict=ScientificVerdict.ACCEPT,
+        actual_gpu_hours=0.9,
+        actual_cost_usd=0.45,
+        surprise="",
+        updated_belief="Alternative encoder is promising.",
+        next_step="Promote to 25h for stronger confirmation.",
+    )
+    request = PromotionRequest(
+        question_id="ARCH-LD-202",
+        candidate_version="c0.5.0",
+        from_scale="10h",
+        to_scale="25h",
+        scientific_verdict=ScientificVerdict.ACCEPT,
+        action=ScaleAction.PROMOTE_SCALE,
+        promotion_rule=plan.promotion_rule,
+        promotion_rule_met=True,
+        evidence_refs=("registry#probe_arch_ld202_10h",),
+        estimated_gpu_hours=2.0,
+        estimated_cost_usd=1.0,
+    )
+    child = register_promoted_experiment(
+        request,
+        tracker=tracker,
+        source_experiment_id=completed.experiment_id,
+        target_experiment_id="probe_arch_ld202_25h",
+        large_data_plan=_large_data_plan(),
+        remaining_budget_usd=4.5,
+    )
+
+    records = {r.experiment_id: r for r in tracker.load_all()}
+    parent = records["probe_arch_ld202_10h"]
+    assert parent.scale_action == "PROMOTE_SCALE"
+    assert parent.extra_fields["promotion_to_scale"] == "25h"
+    assert child.scale_parent_experiment_id == parent.experiment_id
+    assert child.data_scale == "25h"
+    assert child.technical_status == "IN_PROGRESS"
+    assert child.setup["train_subset_sha256"] == "2" * 64
