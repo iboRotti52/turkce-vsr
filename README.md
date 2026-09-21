@@ -2,7 +2,15 @@
 
 Bu proje, video akışlarından ses olmadan yalnızca dudak hareketlerini analiz ederek konuşulan **Türkçe metni** deşifre eden uçtan uca bir Görsel Konuşma Tanıma (Visual Speech Recognition / Lip Reading) yapay zeka sistemidir.
 
-Proje şu anda temiz araştırma başlangıcındadır. Mimari ve eğitim reçetesi önceden seçilmemiştir; bütün bileşenler veri/evaluation audit'i ve geniş kaynak araştırması sonrasında kanıtlarla belirlenecektir.
+> **Araştırma durumu (small-data fazı tamamlandı):** Kanonik model **`c0.4.0`**
+> `READY_FOR_FULL_TRAIN` aşamasındadır — 12/12 readiness kapısı kanıtlarla
+> geçildi (`research/RESEARCH_STATE.md`), 32 probe `experiments/registry.jsonl`
+> içinde kayıtlı, kararlar D1–D23 (`research/DECISIONS.md`). Kullanıcı talimatı
+> ve `GEMINI.md` protokolü gereği **full training başlatılmadan duruldu**;
+> test kümesi (617 klip) karantinadadır. Sonraki aşama, yeni/büyük ve daha
+> çeşitli veri rejiminde (`avsr-tr-ekip/avsr-tr-dataset`) **`c0.5.0` ile yeniden
+> doğrulamadır** — eski konuşmacı split'i yeni veride tekrar kullanılmaz.
+> Devir notu: [HANDOVER.md](HANDOVER.md).
 
 ## Antigravity ile otonom araştırmayı başlatma
 
@@ -21,9 +29,9 @@ Araştırma çok sayıda kalıcı pilot model üretmez. Tek kanonik modeli kanı
 2. **Türkçe Fonetik ve Visem Haritalama**:
    - Türkçe alfabeye özgü 29 harf (`ç, ğ, ı, ö, ş, ü`) ve CTC blank token uyumlu sözlük.
    - Eşgörünümlü sesleri (homophenes) analiz eden **12 sınıflı Türkçe visem sınıflandırması** (çift dudaksı: b/p/m, diş-dudaksı: f/v vb.).
-3. **Açık mimari araştırması**:
-   - Görsel frontend, zamansal model, objective/tokenizer, loss, curriculum, optimizer, initializer, decoder ve keyword spotting henüz seçilmemiştir.
-   - VSR, video, ASR, self-supervised öğrenme, multilingual transfer ve komşu alanlardan uygun her yaklaşım değerlendirilebilir.
+3. **Dondurulmuş kanonik mimari (c0.4.0)**:
+   - Görsel frontend: Auto-AVSR 3D-ResNet18; zamansal model: 4 katmanlı Conformer; hedef: 31 token Char CTC; curriculum `<=3.5s -> <=6s -> <=8s`; optimizer AdamW + CosineAnnealingLR; decoder: kalibre greedy + lexicon beam; KWS: CTC posterior spotter (D1–D23 ile kanıtlı, detay `research/CANDIDATE.md`).
+   - VSR, video, ASR, self-supervised öğrenme ve komşu alanlardan alternatifler araştırma boyunca elendi veya ertelendi (kararlar `research/DECISIONS.md`).
 4. **İnteraktif Web Arayüzü (Gradio)**:
    - Video yükleme veya web kamerasından canlı dudak okuma, görsel visem akışı ve kırpılmış dudak ROI önizlemesi.
 5. **Hugging Face Entegrasyonu**:
@@ -114,7 +122,7 @@ pip install -r requirements.txt
 > Kodun varsayılan indirme adresi bu datasettir (`src/data/hf_downloader.py`).
 > Arkadaş devri için önce [HANDOVER.md](HANDOVER.md) dosyasını oku.
 
-Projede kullanılan ~28.4 saatlik Türkçe dudak okuma verisini S3 deposundan çekmek için:
+Projede kullanılan ~28.4 saatlik Türkçe dudak okuma verisini (legacy S3 yolu; büyük veri için [HANDOVER.md](HANDOVER.md)) çekmek için:
 
 ```bash
 # Model eğitimi için gereken 96x96 dudak ROI klibi ve etiketleri indir (~4.7 GiB):
@@ -128,13 +136,23 @@ python scripts/build_dataset_manifest.py
 ```
 > Detaylı veri mimarisi ve S3 hiyerarşisi için [DATASET_GUIDE.md](docs/DATASET_GUIDE.md) belgesini inceleyin.
 
-### 3. Birim Testlerini Çalıştırma (TDD)
+### 3. Birim Testlerini Çalıştırma
 
 ```bash
-python3 -m unittest discover tests
+.venv/bin/python -m pytest -q   # beklenen: 105 passed, 8 skipped (skip'ler: local veri yokluğu)
 ```
 
-### 3. Gradio Web Uygulamasını Başlatma
+### 4. Full-Training Preflight (ücretli işlem başlatmaz)
+
+```bash
+.venv/bin/python -m src.full_training --manifest full_train_manifest.json
+```
+
+Tarihsel `c0.4.0` manifestosu bilerek FAIL verir (kanıt olarak korunur,
+çalıştırılamaz — bkz. `full_train_manifest.PROVENANCE.md`). Preflight geçse
+bile eğitim otomatik başlamaz.
+
+### 5. Gradio Web Uygulamasını Başlatma
 
 Kullanıcı dostu web arayüzünü çalıştırmak için:
 

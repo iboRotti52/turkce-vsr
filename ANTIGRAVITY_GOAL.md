@@ -15,7 +15,7 @@ Aşağıdaki metni Antigravity'de `/goal` komutuna ver:
 ## Beklenen başlangıç durumu
 
 - Candidate: `c0.4.0`
-- Aşama: `CONFIRMING`
-- Full training: Yetkisiz
-- Aktif soru: `LOWDATA-001`
+- Aşama: `READY_FOR_FULL_TRAIN` (12/12 readiness kapısı geçti; full training kullanıcı talimatıyla başlatılmadı)
+- Full training: Yetkisiz (preflight: `python -m src.full_training --manifest full_train_manifest.json`)
+- Aktif soru: Yok (tüm açık yüksek etkili sorular kapatıldı; sonraki faz `c0.5.0` büyük-veri yeniden doğrulamasıdır)
 - Sonraki kayıt: `research/NEXT_ACTION.md`

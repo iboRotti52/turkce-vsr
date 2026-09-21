@@ -133,10 +133,10 @@ def test_seal_full_train_transitions_stage_and_writes_manifest(tmp_path, mock_ca
     state = load_candidate(mock_candidate_yaml)
     assert state.stage == ResearchStage.READY_FOR_FULL_TRAIN
 
-    # Test authorize succeeds on sealed candidate
-    manifest_data = handle_authorize_full_train(
-        candidate_path=mock_candidate_yaml,
-        manifest_path=manifest_path,
-    )
-    assert manifest_data["candidate_version"] == "c0.4.0"
-    assert manifest_data["seeds"] == [42, 123, 456]
+    # Tutarsız mock manifesto (sahte hash'ler, kirli/bilinmeyen revizyon)
+    # extended preflight'ta fail-closed kalmalıdır.
+    with pytest.raises(RuntimeError, match="[Pp]reflight"):
+        handle_authorize_full_train(
+            candidate_path=mock_candidate_yaml,
+            manifest_path=manifest_path,
+        )

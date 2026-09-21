@@ -15,12 +15,20 @@
 
 ## Kullanıcı Full Training Yetkisi Verdiğinde Çalıştırılacak Komut
 
-Kullanıcı gelecekte tam eğitim yetkisi verirse, dondurulmuş manifestodan tam eğitim şu komutla başlatılabilir:
+Tek kanonik entrypoint, preflight-only ve fail-closed'dur (ücretli işlem
+başlatmaz; `--manifest` bayraklı eski çağrı hiçbir zaman var olmadı):
 
 ```bash
-# Full training yetkisi kullanıcı tarafından verildiğinde:
-.venv/bin/python -m src.modal_runner.cloud_train --manifest full_train_manifest.json
+# Full-training preflight (ücretli işlem YOK; tarihsel c0.4.0 manifestosu
+# bilerek FAIL verir — kanıt olarak korunur, çalıştırılamaz):
+.venv/bin/python -m src.full_training --manifest full_train_manifest.json
+
+# Eşdeğer programatik yol:
+# .venv/bin/python run_experiment.py --mode full-train --full-train-manifest full_train_manifest.json
 ```
+
+Preflight geçse bile eğitim otomatik başlamaz; GPU lansmanı ayrı, açık insan
+kararıyla yapılır.
 
 
 

@@ -35,6 +35,8 @@ from src.experiments.research_governance import (
     build_full_train_manifest,
     write_full_train_manifest,
     require_full_train_authorized,
+    preflight_full_train_manifest,
+    require_clean_code_revision,
 )
 
 ROOT = pathlib.Path(__file__).resolve().parent
@@ -830,7 +832,12 @@ def handle_seal_full_train(
     c_path.write_text(yaml.safe_dump(raw, sort_keys=False), encoding="utf-8")
 
     updated_state = load_candidate(c_path)
-    rev = code_revision or get_git_revision()
+    if code_revision is not None:
+        rev = code_revision
+    else:
+        # Fail-closed: dirty tree ile mühürleme yasaktır (c0.4.0 provenance
+        # boşluğunun tekrarı olmaması için açık revizyon da temiz olmalıdır).
+        rev = require_clean_code_revision(ROOT)
     manifest_seeds = seeds or [42, 123, 456]
 
     manifest = build_full_train_manifest(
@@ -844,6 +851,12 @@ def handle_seal_full_train(
         budget_usd=budget_usd,
         dataset_scope_note=dataset_scope_note,
     )
+    init_file = CHECKPOINTS_DIR / pathlib.Path(initializer).name
+    if init_file.is_file():
+        import hashlib as _hashlib
+
+        manifest["initializer_sha256"] = _hashlib.sha256(init_file.read_bytes()).hexdigest()
+        manifest["sealed_from_clean_revision"] = True
     write_full_train_manifest(m_path, manifest)
     print(f"🔒 Candidate {updated_state.candidate_version} başarıyla READY_FOR_FULL_TRAIN mühürlendi!")
     print(f"📄 Manifesto kaydedildi: {m_path}")
@@ -854,11 +867,30 @@ def handle_authorize_full_train(
     candidate_path: Union[str, pathlib.Path],
     manifest_path: Union[str, pathlib.Path],
 ) -> Dict[str, Any]:
+    """Canonical full-training preflight: extended fail-closed kontroller.
+
+    Ücretli hiçbir işlem başlatmaz; yalnızca raporlar ve engellerde
+    RuntimeError fırlatır. Tarihsel c0.4.0 manifestosu bilerek FAIL verir
+    (bkz. full_train_manifest.PROVENANCE.md).
+    """
+    report = preflight_full_train_manifest(
+        manifest_path=manifest_path,
+        candidate_path=candidate_path,
+        root_dir=ROOT,
+    )
     manifest = require_full_train_authorized(candidate_path, manifest_path)
+    print(f"Full-training preflight: {'GEÇTİ' if report.passed else 'KALDI'}")
+    for name, check in report.checks.items():
+        print(f"  [{'PASS' if check['status'] == 'PASSED' else 'FAIL'}] {name}: {check.get('detail', '')}")
+    if not report.passed:
+        raise RuntimeError(
+            f"Full-training preflight engelleri: {list(report.blockers)}"
+        )
     print(f"✅ Full training yetkilendirmesi GEÇTİ!")
     print(f"   Candidate : {manifest.get('candidate_version')}")
     print(f"   Seeds     : {manifest.get('seeds')}")
     print(f"   Hash      : {manifest.get('candidate_recipe_sha256')[:16]}...")
+    print("   NOT: Eğitim otomatik başlatılmadı; GPU lansmanı ayrı insan kararıyla yapılır.")
     return manifest
 
 

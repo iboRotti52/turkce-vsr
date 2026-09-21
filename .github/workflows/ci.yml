@@ -1,0 +1,26 @@
+name: ci
+
+on:
+  push:
+    branches: ["master"]
+  pull_request:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history — preflight ancestry/quarantine checks need it)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install CPU-only torch first (keeps CI fast; CUDA wheels are GBs)
+        run: pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision torchaudio
+      - name: Install project deps + pytest
+        run: pip install -r requirements.txt pytest
+      - name: Run full test suite (unit + research-governance/guardrail/preflight)
+        run: python -m pytest -q

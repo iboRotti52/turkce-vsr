@@ -24,7 +24,12 @@ Eski küçük-veri ID'si (`iboRotti/avsr-tr-dataset`) yalnızca frozen kanıtlar
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env   # HF_TOKEN'ını .env'e yaz
-.venv/bin/python -m pytest -q   # 93 passed, 7 skipped olmalı
+.venv/bin/python -m pytest -q
+
+# Canonical full-training preflight (ücretli işlem başlatmaz):
+.venv/bin/python -m src.full_training --manifest full_train_manifest.json
+# Tarihsel c0.4.0 manifestosu bilerek FAIL verir (kanıt, çalıştırılamaz);
+# detay: full_train_manifest.PROVENANCE.md
 
 # Büyük veriyi çek (repo_id parametrik, eski veriye de dönebilirsin):
 .venv/bin/python - <<'EOF'

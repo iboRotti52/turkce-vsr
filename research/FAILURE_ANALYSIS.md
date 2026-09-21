@@ -1,7 +1,7 @@
 # Failure Analysis
 
-**Candidate:** `c0.1.0`  
-**Son Güncelleme:** 2026-09-17  
+**Candidate:** `c0.4.0`
+**Son Güncelleme:** 2026-09-18  
 
 ---
 

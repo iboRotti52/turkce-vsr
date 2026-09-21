@@ -2,7 +2,7 @@
 
 import hashlib
 import pathlib
-from typing import Any, Dict, Iterable, Union
+from typing import Any, Dict, Iterable, Optional, Union
 
 
 def require_requested_sample_count(*, split: str, requested: int, actual: int) -> None:
@@ -58,8 +58,15 @@ def build_checkpoint_provenance(
     seed: int,
     initializer: str,
     code_revision: str,
+    working_tree_clean: Optional[bool] = None,
 ) -> Dict[str, Any]:
-    """Bir checkpoint'in veri ve ağırlık kökenini tekrar üretilebilir biçimde kaydeder."""
+    """Bir checkpoint'in veri ve ağırlık kökenini tekrar üretilebilir biçimde kaydeder.
+
+    working_tree_clean: HEAD anında `git status --porcelain` boşsa True olmalı.
+    Tarihsel c0.4.0 boşluğu (dirty tree + yalnız HEAD kaydı) tekrarlanmasın diye
+    çağrıcılar bu alanı doldurmalıdır (bkz. get_code_revision_status);
+    bilinmiyorsa None bırakılır ve eksiklik raporda görünür.
+    """
     split_path = pathlib.Path(split_map_path)
     if not split_path.exists():
         raise FileNotFoundError(f"Split haritası bulunamadı: {split_path}")
@@ -79,4 +86,5 @@ def build_checkpoint_provenance(
         "seed": seed,
         "initializer": initializer,
         "code_revision": code_revision,
+        "working_tree_clean": working_tree_clean,
     }
