@@ -290,3 +290,27 @@ def test_budget_counts_historical_actual_and_active_reservation(tmp_path):
     # rather than trusting the budget math on a tampered active record.
     with pytest.raises(RuntimeError, match="Pre-result experiment contract"):
         reconcile_workflow(tracker, total_budget_usd=25.0)
+
+
+def test_legacy_actual_cost_is_not_forgotten(tmp_path):
+    registry = tmp_path / "registry.jsonl"
+    tracker = ExperimentTracker(registry)
+
+    from src.experiments.tracker import ExperimentRecord
+
+    tracker.log(
+        ExperimentRecord(
+            experiment_id="legacy_small_data",
+            hypothesis="h",
+            falsification_criteria="f",
+            setup={},
+            expectation="e",
+            status="PASSED",
+            cost_usd=2.73,
+            # Historical rows may not have technical_status.
+        )
+    )
+
+    status = reconcile_workflow(tracker, total_budget_usd=25.0)
+    assert status.spent_actual_usd == pytest.approx(2.73)
+    assert status.remaining_unreserved_usd == pytest.approx(22.27)
