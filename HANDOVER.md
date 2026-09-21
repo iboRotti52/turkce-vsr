@@ -88,7 +88,8 @@ uyarlayarak üzerine yazma.
 
 ### Large-data training kuralları
 
-- Research/selection yalnız train + speaker-disjoint validation kullanır; test split
+- Research/selection yalnız train + identity-group-disjoint validation kullanır;
+  `channel` proxy ise bunun gerçek speaker ayrımı olmadığı açıkça korunur. Test split
   araştırma sırasında indirilmez/değerlendirilmez.
 - Her hipotezi doğrudan 50–100 saatte koşma. En ucuz speaker-diverse stage'de başla;
   yalnız önceden yazılmış karar kuralı geçerse daha büyük stage'e ölçekle.
