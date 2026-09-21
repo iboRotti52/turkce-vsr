@@ -8,12 +8,10 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
-import csv
 import hashlib
 import json
-import pathlib
 import random
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 
 SPEAKER_IDENTITY_FIELDS: Tuple[str, ...] = (
