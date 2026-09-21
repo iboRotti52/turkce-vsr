@@ -7,7 +7,7 @@ research question and evidence in GEMINI.md.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum
 import pathlib
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
@@ -141,6 +141,28 @@ def _find_registry_record(tracker: "ExperimentTracker", experiment_id: str) -> E
     return matches[0]
 
 
+def _require_hex(value: Any, length: int, label: str) -> str:
+    normalized = str(value or "").strip().lower()
+    if len(normalized) != length or any(ch not in "0123456789abcdef" for ch in normalized):
+        raise ValueError(f"{label} geçerli {length}-hex değer olmalıdır.")
+    return normalized
+
+
+def _stage_sample_hash(plan: Mapping[str, Any], scale: str) -> Optional[str]:
+    if scale == VIRTUAL_SMOKE_SCALE:
+        return None
+    summary = (plan.get("staged_summary") or {}).get(scale) or {}
+    return _require_hex(summary.get("sample_ids_sha256"), 64, f"{scale} sample_ids_sha256")
+
+
+def _require_large_data_identity(plan: Mapping[str, Any], scale: str) -> None:
+    if scale == VIRTUAL_SMOKE_SCALE:
+        return
+    _require_hex(plan.get("dataset_revision"), 40, "dataset_revision")
+    _require_hex(plan.get("split_map_sha256"), 64, "split_map_sha256")
+    _stage_sample_hash(plan, scale)
+
+
 def validate_scale_experiment_plan(
     experiment: ScaleExperimentPlan,
     *,
@@ -192,6 +214,7 @@ def validate_scale_experiment_plan(
             "İlk deney requested_scale ile minimum_sufficient_scale aynı olmalıdır; "
             "daha büyük scale'e geçiş promotion olarak kaydedilmelidir."
         )
+    _require_large_data_identity(large_data_plan, experiment.requested_scale)
 
     requested_idx = scales.index(experiment.requested_scale)
     if requested_idx > 0 and not experiment.why_smaller_scale_is_insufficient.strip():
@@ -245,15 +268,15 @@ def register_scale_experiment(
         experiment.why_smaller_scale_is_insufficient
     )
 
-    stage_summary = (large_data_plan.get("staged_summary") or {}).get(
-        experiment.requested_scale, {}
-    )
-    if stage_summary.get("sample_ids_sha256"):
-        setup_payload["train_subset_sha256"] = stage_summary["sample_ids_sha256"]
+    stage_hash = _stage_sample_hash(large_data_plan, experiment.requested_scale)
+    if stage_hash:
+        setup_payload["train_subset_sha256"] = stage_hash
     if large_data_plan.get("dataset_revision"):
         setup_payload["dataset_revision"] = large_data_plan["dataset_revision"]
     if large_data_plan.get("split_map_sha256"):
         setup_payload["split_map_sha256"] = large_data_plan["split_map_sha256"]
+    if large_data_plan.get("plan_sha256"):
+        setup_payload["large_data_plan_sha256"] = large_data_plan["plan_sha256"]
 
     record = ExperimentRecord(
         experiment_id=experiment_id,
@@ -300,6 +323,11 @@ def complete_scale_experiment(
         raise RuntimeError(
             f"Yalnız pre-registered IN_PROGRESS deney tamamlanabilir; mevcut={record.technical_status}"
         )
+    if scale_action == ScaleAction.PROMOTE_SCALE:
+        raise ValueError(
+            "PROMOTE_SCALE complete_scale_experiment içinde doğrudan yazılamaz; "
+            "register_promoted_experiment ile governance doğrulaması gerekir."
+        )
     if actual_gpu_hours < 0 or actual_cost_usd < 0:
         raise ValueError("Gerçekleşen GPU-hours/USD negatif olamaz.")
     if not isinstance(result, Mapping):
@@ -340,6 +368,95 @@ def complete_scale_experiment(
     )
     tracker.log(completed)
     return completed
+
+
+def register_promoted_experiment(
+    request: PromotionRequest,
+    *,
+    tracker: "ExperimentTracker",
+    source_experiment_id: str,
+    target_experiment_id: str,
+    large_data_plan: Mapping[str, Any],
+    remaining_budget_usd: float,
+) -> ExperimentRecord:
+    """Validate promotion, mark the parent, and pre-register the child scale run."""
+    from src.experiments.tracker import ExperimentTracker
+
+    if not isinstance(tracker, ExperimentTracker):
+        raise TypeError("tracker ExperimentTracker olmalıdır.")
+    _require_nonempty("target_experiment_id", target_experiment_id)
+    if any(r.experiment_id == target_experiment_id for r in tracker.load_all()):
+        raise RuntimeError(f"target experiment_id zaten mevcut: {target_experiment_id}")
+
+    validate_promotion_request(
+        request,
+        tracker=tracker,
+        source_experiment_id=source_experiment_id,
+        large_data_plan=large_data_plan,
+        remaining_budget_usd=remaining_budget_usd,
+    )
+    source = _find_registry_record(tracker, source_experiment_id)
+    target_hash = _stage_sample_hash(large_data_plan, request.to_scale)
+    _require_large_data_identity(large_data_plan, request.to_scale)
+
+    source_extra = dict(source.extra_fields)
+    source_extra.update(
+        {
+            "promotion_to_scale": request.to_scale,
+            "promotion_evidence_refs": list(request.evidence_refs),
+            "promotion_estimated_gpu_hours": request.estimated_gpu_hours,
+            "promotion_estimated_cost_usd": request.estimated_cost_usd,
+            "promotion_scale_sensitive_ambiguity": request.scale_sensitive_ambiguity,
+            "promotion_larger_scale_rationale": request.why_larger_scale_resolves_ambiguity,
+            "promotion_skip_scale_justification": request.skip_scale_justification,
+        }
+    )
+    updated_source = replace(
+        source,
+        scale_action=ScaleAction.PROMOTE_SCALE.value,
+        extra_fields=source_extra,
+    )
+    tracker.log(updated_source)
+
+    child_setup = dict(source.setup)
+    child_setup.update(
+        {
+            "question_id": request.question_id,
+            "data_scale": request.to_scale,
+            "promotion_from_scale": request.from_scale,
+            "promotion_from_experiment_id": source_experiment_id,
+            "promotion_evidence_refs": list(request.evidence_refs),
+        }
+    )
+    if target_hash:
+        child_setup["train_subset_sha256"] = target_hash
+    if large_data_plan.get("dataset_revision"):
+        child_setup["dataset_revision"] = large_data_plan["dataset_revision"]
+    if large_data_plan.get("split_map_sha256"):
+        child_setup["split_map_sha256"] = large_data_plan["split_map_sha256"]
+    if large_data_plan.get("plan_sha256"):
+        child_setup["large_data_plan_sha256"] = large_data_plan["plan_sha256"]
+
+    child = ExperimentRecord(
+        experiment_id=target_experiment_id,
+        hypothesis=source.hypothesis,
+        falsification_criteria=source.falsification_criteria,
+        setup=child_setup,
+        expectation=source.expectation,
+        status="IN_PROGRESS",
+        candidate_version=source.candidate_version,
+        data_scale=request.to_scale,
+        minimum_sufficient_scale=source.minimum_sufficient_scale,
+        evidence_scope=source.evidence_scope,
+        promotion_rule=source.promotion_rule,
+        scale_action=ScaleAction.STOP.value,
+        scale_parent_experiment_id=source_experiment_id,
+        estimated_gpu_hours=request.estimated_gpu_hours,
+        cost_estimate_usd=request.estimated_cost_usd,
+        technical_status="IN_PROGRESS",
+    )
+    tracker.log(child)
+    return child
 
 
 def _next_scale(scales: Sequence[str], current: str) -> Optional[str]:
