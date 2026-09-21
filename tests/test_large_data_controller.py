@@ -8,6 +8,7 @@ from src.experiments.large_data_controller import (
     ScientificVerdict,
     build_scaling_curve,
     complete_scale_experiment,
+    fail_scale_experiment,
     ordered_research_scales,
     register_promoted_experiment,
     register_scale_experiment,
@@ -38,6 +39,18 @@ def _large_data_plan():
     }
 
 
+def _execution_setup(**extra):
+    setup = {
+        "code_revision": "d" * 40,
+        "candidate_recipe_sha256": "e" * 64,
+        "initializer_id": "auto-avsr:vsr_trlrs3_base",
+        "initializer_sha256": "f" * 64,
+        "seed": 42,
+    }
+    setup.update(extra)
+    return setup
+
+
 def _source_record(
     *,
     scale="10h",
@@ -48,13 +61,13 @@ def _source_record(
         experiment_id="probe_arch_newfamily_10h",
         hypothesis="A different temporal model may scale better than the current Conformer.",
         falsification_criteria="No WER gain or worse long-utterance failures.",
-        setup={
-            "question_id": "ARCH-LD-001",
-            "dataset_revision": "a" * 40,
-            "split_map_sha256": "b" * 64,
-            "train_subset_sha256": "1" * 64,
-            "large_data_plan_sha256": "c" * 64,
-        },
+        setup=_execution_setup(
+            question_id="ARCH-LD-001",
+            dataset_revision="a" * 40,
+            split_map_sha256="b" * 64,
+            train_subset_sha256="1" * 64,
+            large_data_plan_sha256="c" * 64,
+        ),
         expectation="Better generalization on held-out validation.",
         result={"wer": 0.31},
         status={
@@ -119,6 +132,7 @@ def test_controller_constrains_cost_not_scientific_search_space():
     validate_scale_experiment_plan(
         plan,
         large_data_plan=_large_data_plan(),
+        setup=_execution_setup(),
         remaining_budget_usd=10.0,
     )
 
@@ -189,6 +203,7 @@ def test_accept_can_promote_only_with_predeclared_rule_met(tmp_path):
         tracker=tracker,
         source_experiment_id=source.experiment_id,
         large_data_plan=_large_data_plan(),
+        setup=_execution_setup(),
         remaining_budget_usd=8.0,
     )
 
@@ -256,6 +271,7 @@ def test_inconclusive_is_not_automatic_promotion(tmp_path):
         tracker=tracker,
         source_experiment_id=source.experiment_id,
         large_data_plan=_large_data_plan(),
+        setup=_execution_setup(),
         remaining_budget_usd=8.0,
     )
 
@@ -408,7 +424,7 @@ def test_register_scale_experiment_writes_pre_result_governance(tmp_path):
         experiment_id="probe_arch_ld002_10h",
         large_data_plan=large_plan,
         remaining_budget_usd=5.0,
-        setup={"baseline_experiment_id": "baseline_c05_10h"},
+        setup=_execution_setup(baseline_experiment_id="baseline_c05_10h"),
     )
 
     assert record.status == "IN_PROGRESS"
@@ -442,6 +458,7 @@ def test_completion_separates_technical_status_from_scientific_verdict(tmp_path)
         tracker=tracker,
         experiment_id="probe_train_ld010_10h",
         large_data_plan=_large_data_plan(),
+        setup=_execution_setup(),
         remaining_budget_usd=5.0,
     )
     assert started.technical_status == "IN_PROGRESS"
@@ -487,6 +504,7 @@ def test_in_progress_experiment_cannot_be_promoted(tmp_path):
         tracker=tracker,
         experiment_id="probe_arch_ld099_10h",
         large_data_plan=_large_data_plan(),
+        setup=_execution_setup(),
         remaining_budget_usd=5.0,
     )
     request = PromotionRequest(
@@ -533,6 +551,7 @@ def test_registration_cannot_overwrite_predeclared_metadata(tmp_path):
         tracker=tracker,
         experiment_id="probe_arch_ld777_10h",
         large_data_plan=_large_data_plan(),
+        setup=_execution_setup(),
         remaining_budget_usd=5.0,
     )
     changed = ScaleExperimentPlan(
@@ -617,6 +636,7 @@ def test_completion_cannot_claim_unvalidated_promotion(tmp_path):
         tracker=tracker,
         experiment_id="probe_arch_ld201_10h",
         large_data_plan=_large_data_plan(),
+        setup=_execution_setup(),
         remaining_budget_usd=5.0,
     )
     with pytest.raises(ValueError, match="register_promoted_experiment"):
@@ -655,6 +675,7 @@ def test_validated_promotion_creates_parent_child_registry_chain(tmp_path):
         tracker=tracker,
         experiment_id="probe_arch_ld202_10h",
         large_data_plan=_large_data_plan(),
+        setup=_execution_setup(),
         remaining_budget_usd=5.0,
     )
     completed = complete_scale_experiment(
@@ -687,6 +708,7 @@ def test_validated_promotion_creates_parent_child_registry_chain(tmp_path):
         source_experiment_id=completed.experiment_id,
         target_experiment_id="probe_arch_ld202_25h",
         large_data_plan=_large_data_plan(),
+        setup=_execution_setup(),
         remaining_budget_usd=4.5,
     )
 
@@ -721,6 +743,7 @@ def test_pre_result_contract_detects_manual_registry_tampering(tmp_path):
         tracker=tracker,
         experiment_id="probe_arch_ld303_10h",
         large_data_plan=_large_data_plan(),
+        setup=_execution_setup(),
         remaining_budget_usd=5.0,
     )
 
@@ -822,3 +845,129 @@ def test_promotion_cannot_cross_split_or_source_stage(tmp_path):
             large_data_plan=stage_changed,
             remaining_budget_usd=5.0,
         )
+
+
+def test_non_smoke_registration_requires_execution_provenance(tmp_path):
+    tracker = ExperimentTracker(tmp_path / "registry.jsonl")
+    plan = ScaleExperimentPlan(
+        question_id="ARCH-LD-401",
+        candidate_version="c0.5.0",
+        hypothesis="Test a new temporal mechanism.",
+        requested_scale="10h",
+        minimum_sufficient_scale="10h",
+        falsification_criteria="No WER improvement.",
+        expectation="Lower WER.",
+        information_gain_rationale="10h is enough for the first reliable comparison.",
+        why_smaller_scale_is_insufficient="Smoke cannot estimate held-out WER.",
+        promotion_rule="Promote if WER improves >= 3%.",
+        estimated_gpu_hours=1.0,
+        estimated_cost_usd=0.5,
+    )
+    with pytest.raises(ValueError, match="code_revision"):
+        register_scale_experiment(
+            plan,
+            tracker=tracker,
+            experiment_id="probe_arch_ld401_10h",
+            large_data_plan=_large_data_plan(),
+            remaining_budget_usd=5.0,
+        )
+
+
+def test_failed_run_is_closed_without_scientific_verdict(tmp_path):
+    tracker = ExperimentTracker(tmp_path / "registry.jsonl")
+    plan = ScaleExperimentPlan(
+        question_id="TRAIN-LD-402",
+        candidate_version="c0.5.0",
+        hypothesis="Test a training schedule.",
+        requested_scale="10h",
+        minimum_sufficient_scale="10h",
+        falsification_criteria="No stable optimization improvement.",
+        expectation="More stable validation loss.",
+        information_gain_rationale="10h exposes training dynamics.",
+        why_smaller_scale_is_insufficient="Smoke cannot estimate validation stability.",
+        promotion_rule="Promote if validation stability improves without WER regression.",
+        estimated_gpu_hours=1.0,
+        estimated_cost_usd=0.5,
+    )
+    started = register_scale_experiment(
+        plan,
+        tracker=tracker,
+        experiment_id="probe_train_ld402_10h",
+        large_data_plan=_large_data_plan(),
+        setup=_execution_setup(),
+        remaining_budget_usd=5.0,
+    )
+    failed = fail_scale_experiment(
+        started.experiment_id,
+        tracker=tracker,
+        error="CUDA OOM after dataloader warmup",
+        actual_gpu_hours=0.2,
+        actual_cost_usd=0.1,
+    )
+    assert failed.technical_status == "ERROR"
+    assert failed.scientific_verdict is None
+    assert failed.status == "ERROR"
+    assert failed.result["error"].startswith("CUDA OOM")
+
+    request = PromotionRequest(
+        question_id="TRAIN-LD-402",
+        candidate_version="c0.5.0",
+        from_scale="10h",
+        to_scale="25h",
+        scientific_verdict=ScientificVerdict.ACCEPT,
+        action=ScaleAction.PROMOTE_SCALE,
+        promotion_rule=plan.promotion_rule,
+        promotion_rule_met=True,
+        evidence_refs=("registry#probe_train_ld402_10h",),
+        estimated_gpu_hours=2.0,
+        estimated_cost_usd=1.0,
+    )
+    with pytest.raises(RuntimeError, match="Tamamlanmamış"):
+        validate_promotion_request(
+            request,
+            tracker=tracker,
+            source_experiment_id=failed.experiment_id,
+            large_data_plan=_large_data_plan(),
+            remaining_budget_usd=4.9,
+        )
+
+
+def test_governance_fails_closed_on_malformed_registry(tmp_path):
+    tracker = ExperimentTracker(tmp_path / "registry.jsonl")
+    tracker.registry_path.write_text("{not valid json}\n", encoding="utf-8")
+    plan = ScaleExperimentPlan(
+        question_id="ARCH-LD-403",
+        candidate_version="c0.5.0",
+        hypothesis="Test architecture.",
+        requested_scale="10h",
+        minimum_sufficient_scale="10h",
+        falsification_criteria="No gain.",
+        expectation="Gain.",
+        information_gain_rationale="10h comparison.",
+        why_smaller_scale_is_insufficient="Smoke cannot measure WER.",
+        promotion_rule="Promote on reliable WER gain.",
+        estimated_gpu_hours=1.0,
+        estimated_cost_usd=0.5,
+    )
+    with pytest.raises(RuntimeError, match="registry parse"):
+        register_scale_experiment(
+            plan,
+            tracker=tracker,
+            experiment_id="probe_arch_ld403_10h",
+            large_data_plan=_large_data_plan(),
+            setup=_execution_setup(),
+            remaining_budget_usd=5.0,
+        )
+
+
+def test_nonpositive_hour_stage_fails_closed():
+    plan = {
+        **_large_data_plan(),
+        "staged_subsets": {"0h": ["a"], "full": ["a"]},
+        "staged_summary": {
+            "0h": {"sample_ids_sha256": "1" * 64},
+            "full": {"sample_ids_sha256": "4" * 64},
+        },
+    }
+    with pytest.raises(ValueError, match="Bilinmeyen araştırma ölçeği"):
+        ordered_research_scales(plan)
