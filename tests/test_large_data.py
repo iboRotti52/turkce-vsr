@@ -99,6 +99,8 @@ def test_large_data_plan_pins_revision_and_hashes_split():
     payload = plan.to_dict()
 
     assert payload["dataset_revision"] == "b" * 40
+    assert payload["speaker_identity_field"] == "channel"
+    assert payload["speaker_identity_is_proxy"] is True
     assert len(payload["split_map_sha256"]) == 64
     assert len(payload["plan_sha256"]) == 64
     assert payload["split_summary"]["test"]["speakers"] >= 1
@@ -212,3 +214,55 @@ def test_pinned_revisions_use_separate_local_caches(tmp_path):
     )
     assert first.manifest_dir != second.manifest_dir
     assert first.clips_dir != second.clips_dir
+
+
+def test_large_data_plan_rejects_mixed_speaker_identity_semantics():
+    rows = [
+        {
+            "item_id": "video-a",
+            "segment_id": "000001",
+            "duration": "2.0",
+            "speaker_id": "speaker-a",
+            "text": "örnek cümle",
+        },
+        {
+            "item_id": "video-b",
+            "segment_id": "000001",
+            "duration": "2.0",
+            "channel": "channel-b",
+            "text": "örnek cümle",
+        },
+        {
+            "item_id": "video-c",
+            "segment_id": "000001",
+            "duration": "2.0",
+            "channel": "channel-c",
+            "text": "örnek cümle",
+        },
+    ]
+    with pytest.raises(ValueError, match="ortak bir speaker identity"):
+        build_large_data_plan(
+            rows,
+            dataset_id="avsr-tr-ekip/avsr-tr-dataset",
+            dataset_revision="c" * 40,
+        )
+
+
+def test_large_data_plan_rejects_duplicate_sample_ids_and_missing_duration():
+    rows = _rows()
+    duplicate = list(rows) + [dict(rows[0])]
+    with pytest.raises(ValueError, match="duplicate sample"):
+        build_large_data_plan(
+            duplicate,
+            dataset_id="avsr-tr-ekip/avsr-tr-dataset",
+            dataset_revision="d" * 40,
+        )
+
+    invalid = [dict(row) for row in rows]
+    invalid[0]["duration"] = "0"
+    with pytest.raises(ValueError, match="duration"):
+        build_large_data_plan(
+            invalid,
+            dataset_id="avsr-tr-ekip/avsr-tr-dataset",
+            dataset_revision="e" * 40,
+        )
