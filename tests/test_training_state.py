@@ -147,3 +147,33 @@ def test_resume_fails_closed_on_training_stage_change(tmp_path):
             scaler=None,
             expected_provenance=changed,
         )
+
+
+def test_seed_zero_is_valid_provenance_and_initializer_hash_is_immutable(tmp_path):
+    model, optimizer, scheduler = _objects()
+    provenance = _provenance()
+    provenance["seed"] = 0
+    payload = build_training_checkpoint(
+        model=model,
+        optimizer=optimizer,
+        scheduler=scheduler,
+        scaler=None,
+        epoch=0,
+        global_step=0,
+        provenance=provenance,
+    )
+    path = tmp_path / "resume.pt"
+    save_training_checkpoint(path, payload)
+
+    changed = dict(provenance)
+    changed["initializer_sha256"] = "0" * 64
+    new_model, new_optimizer, new_scheduler = _objects()
+    with pytest.raises(RuntimeError, match="Resume provenance uyuşmuyor"):
+        restore_training_checkpoint(
+            path,
+            model=new_model,
+            optimizer=new_optimizer,
+            scheduler=new_scheduler,
+            scaler=None,
+            expected_provenance=changed,
+        )
