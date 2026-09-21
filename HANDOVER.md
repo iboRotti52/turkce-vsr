@@ -134,8 +134,17 @@ modeli mümkün olan en iyi hale getirmek**.
 - Scaling curves `research/SCALING_ANALYSIS.md` içinde raw outputs ve subgroup
   failures ile birlikte kalıcı kanıt olarak tutulur.
 - Large-data deneyini çalıştırmadan önce `register_scale_experiment(...)` ile
-  pre-result registry kaydı oluştur. Koşu bitince `complete_scale_experiment(...)`
-  ile technical completion, scientific verdict, actual GPU-hours/USD ve scale action'ı
-  ayrı kaydet; "çalıştı" ile "hipotez kabul edildi"yi aynı şey sayma.
+  pre-result registry kaydı oluştur. Non-smoke run için code revision, candidate-recipe
+  hash, seed ve initializer ID+SHA-256 zorunludur; registration bunları promotion rule
+  ve exact data-stage provenance ile birlikte `pre_result_contract_sha256` altında
+  mühürler.
+- Koşu bitince `complete_scale_experiment(...)` ile technical completion, scientific
+  verdict, actual GPU-hours/USD ve scale action'ı ayrı kaydet; "çalıştı" ile "hipotez
+  kabul edildi"yi aynı şey sayma. Teknik hata `fail_scale_experiment(...)` ile
+  `ERROR` kapanır ve scientific verdict üretmez.
+- Scale büyütülecekse `register_promoted_experiment(...)` parent ve child kaydını
+  atomik yazar; başka dataset revision/split/stage'e promotion yapmaz, aynı parent'ı
+  iki kez promote etmez ve child'ın sonraki promotion rule'unu child sonucu görülmeden
+  ister.
 
 Programatik policy: `src/experiments/large_data_controller.py`.
