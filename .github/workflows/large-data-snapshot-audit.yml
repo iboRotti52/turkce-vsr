@@ -1,21 +1,19 @@
 name: large-data snapshot audit and Modal rehearsal
 
 on:
-  push:
-    branches:
-      - research/arch-ld-001-modal-round
-    paths:
-      - ".github/workflows/large-data-snapshot-audit.yml"
-      - "src/modal_runner/large_data_rehearsal.py"
-      - "src/data/__init__.py"
   workflow_dispatch:
+    inputs:
+      run_rehearsal:
+        description: "Run the technical Modal A10 rehearsal after the snapshot audit"
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 jobs:
   audit-and-rehearse:
-    if: ${{ github.event_name == 'workflow_dispatch' || !contains(github.event.head_commit.message, '[skip-modal]') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -85,9 +83,11 @@ jobs:
           PY
 
       - name: Install Modal CLI
+        if: ${{ inputs.run_rehearsal }}
         run: pip install "modal>=1.1.0"
 
       - name: Run pinned Modal A10G technical rehearsal
+        if: ${{ inputs.run_rehearsal }}
         env:
           MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID_IBO }}
           MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET_IBO }}
@@ -95,6 +95,7 @@ jobs:
           modal run src/modal_runner/large_data_rehearsal.py             --revision "${{ steps.hf.outputs.revision }}"             --output artifacts/ops_ld_001_modal_rehearsal.json             --n-train 64             --n-val 16             --max-steps 20
 
       - name: Verify rehearsal contract
+        if: ${{ inputs.run_rehearsal }}
         run: |
           python - <<'PY'
           import json
