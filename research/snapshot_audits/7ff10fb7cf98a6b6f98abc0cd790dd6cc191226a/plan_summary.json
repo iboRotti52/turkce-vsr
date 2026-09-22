@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "dataset_id": "avsr-tr-ekip/avsr-tr-dataset",
+  "dataset_revision": "7ff10fb7cf98a6b6f98abc0cd790dd6cc191226a",
+  "seed": 42,
+  "plan_sha256": "6f8a7c343a2c3e5c438223d00dfc7c9e5f59cfb9100841cb177845058e18680b",
+  "split_map_sha256": "7202e89aa9e92ace5c615c6fe0abea185c8f1c66da243ecd735eaf6658c3c7ed",
+  "speaker_identity_field": "channel",
+  "speaker_identity_is_proxy": true,
+  "split_summary": {
+    "test": {
+      "clips": 125,
+      "hours": 0.2594,
+      "speakers": 1
+    },
+    "train": {
+      "clips": 545,
+      "hours": 0.6954,
+      "speakers": 1
+    },
+    "val": {
+      "clips": 216,
+      "hours": 0.2848,
+      "speakers": 1
+    }
+  },
+  "staged_summary": {
+    "full": {
+      "clips": 545,
+      "hours": 0.6954,
+      "speakers": 1,
+      "sample_ids_sha256": "f1bf78cb000540e3bbd05e6778d50586132488a6c6b832d87a94a2e92b73fb2e"
+    }
+  },
+  "note": "Canonical research/large_data_plan.json intentionally remains absent because this snapshot fails the c0.5 scientific gate. Rebuild the full deterministic plan from the pinned revision when auditing."
+}

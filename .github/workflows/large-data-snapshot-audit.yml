@@ -1,0 +1,122 @@
+name: large-data snapshot audit and Modal rehearsal
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_rehearsal:
+        description: "Run the technical Modal A10 rehearsal after the snapshot audit"
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  audit-and-rehearse:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install audit dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install "huggingface_hub>=0.23.0" "pyyaml>=6.0.1"
+
+      - name: Resolve immutable dataset revision
+        id: hf
+        shell: bash
+        run: |
+          python - <<'PY' > /tmp/revision.txt
+          from huggingface_hub import HfApi
+          info = HfApi().dataset_info("avsr-tr-ekip/avsr-tr-dataset")
+          sha = (info.sha or "").strip().lower()
+          if len(sha) != 40 or any(ch not in "0123456789abcdef" for ch in sha):
+              raise SystemExit(f"invalid dataset sha: {sha!r}")
+          print(sha)
+          PY
+          REV="$(cat /tmp/revision.txt)"
+          echo "revision=$REV" >> "$GITHUB_OUTPUT"
+          echo "Resolved revision: $REV"
+
+      - name: Build immutable large-data plan
+        run: |
+          python -m src.data.prepare_large_data             --repo-id avsr-tr-ekip/avsr-tr-dataset             --revision "${{ steps.hf.outputs.revision }}"             --output research/large_data_plan.json             --split-output data/metadata/split_map_large_data.json
+
+      - name: Record scientific gate status
+        id: gate
+        run: |
+          mkdir -p artifacts
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          plan = json.loads(Path("research/large_data_plan.json").read_text())
+          reasons = []
+          if plan.get("speaker_identity_is_proxy"):
+              reasons.append("proxy_speaker_identity_requires_audit")
+          if "10h" not in (plan.get("staged_subsets") or {}):
+              reasons.append("10h_minimum_sufficient_stage_unavailable")
+
+          payload = {
+              "dataset_revision": plan["dataset_revision"],
+              "plan_sha256": plan["plan_sha256"],
+              "split_map_sha256": plan["split_map_sha256"],
+              "speaker_identity_field": plan["speaker_identity_field"],
+              "speaker_identity_is_proxy": plan["speaker_identity_is_proxy"],
+              "split_summary": plan["split_summary"],
+              "available_stages": list((plan.get("staged_subsets") or {}).keys()),
+              "scientific_c0_5_ready": not reasons,
+              "blockers": reasons,
+              "test_split_used": False,
+          }
+          Path("artifacts/large_data_snapshot_audit.json").write_text(
+              json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+          )
+          print("SNAPSHOT_AUDIT_RESULT_BEGIN")
+          print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
+          print("SNAPSHOT_AUDIT_RESULT_END")
+          PY
+
+      - name: Install Modal CLI
+        if: ${{ inputs.run_rehearsal }}
+        run: pip install "modal>=1.1.0"
+
+      - name: Run pinned Modal A10G technical rehearsal
+        if: ${{ inputs.run_rehearsal }}
+        env:
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID_IBO }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET_IBO }}
+        run: |
+          modal run src/modal_runner/large_data_rehearsal.py             --revision "${{ steps.hf.outputs.revision }}"             --output artifacts/ops_ld_001_modal_rehearsal.json             --n-train 64             --n-val 16             --max-steps 20
+
+      - name: Verify rehearsal contract
+        if: ${{ inputs.run_rehearsal }}
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = json.loads(Path("artifacts/ops_ld_001_modal_rehearsal.json").read_text())
+          result = p["training"]
+          assert result["run_type"] == "technical_large_data_modal_rehearsal"
+          assert result["scientific_use_for_model_selection"] is False
+          assert result["scientific_verdict"] is None
+          assert result["test_split_used"] is False
+          assert p["staging"]["test_downloaded"] == 0
+          print("Technical rehearsal contract verified.")
+          PY
+
+      - name: Upload audit and rehearsal artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: arch-ld-001-bootstrap-${{ steps.hf.outputs.revision }}
+          path: |
+            research/large_data_plan.json
+            data/metadata/split_map_large_data.json
+            artifacts/large_data_snapshot_audit.json
+            artifacts/ops_ld_001_modal_rehearsal.json
+          if-no-files-found: error

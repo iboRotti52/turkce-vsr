@@ -11,6 +11,18 @@ markdown cümlesiyle modeli değiştirdim" türü agent drift'ini engellemektir.
 
 Bu katman "ne oldu?" sorusunu cevaplar.
 
+## Technical operations and snapshot audits
+
+Bilimsel round olmayan ama execution/data readiness'i kanıtlayan kayıtlar ayrı tutulur:
+
+- `research/snapshot_audits/<hf-revision>/`: immutable dataset readiness/audit kanıtı.
+- `research/operations/`: teknik rehearsal ve operasyon raporları.
+- `artifacts/operations/`: machine-readable technical outputs.
+
+**Technical rehearsal bilimsel verdict üretmez ve BELIEFS/CANDIDATE değiştiremez.**
+Örneğin OPS-LD-001 gerçek Modal A10 üzerinde data→loader→model→CTC→validation
+hattını doğrular, fakat random-init 20-step sonucu model seçimi için kullanılmaz.
+
 ## 2. Research rounds
 
 `research/rounds/<round-id>/` tek bir bilimsel düşünme döngüsünün snapshot'ıdır:

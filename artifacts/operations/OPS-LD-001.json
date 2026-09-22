@@ -1,0 +1,130 @@
+{
+  "operation_id": "OPS-LD-001",
+  "run_type": "technical_large_data_modal_rehearsal",
+  "scientific_use_for_model_selection": false,
+  "scientific_verdict": null,
+  "test_split_used": false,
+  "source_workflow_run_id": 35782070031,
+  "source_workflow_artifact_id": 10718572892,
+  "source_code_revision": "7c326ff7b065392acc856c1088e2c759eaf5f657",
+  "modal_app_url": "https://modal.com/apps/ibrahimgozlukaya/main/ap-iFl3s43WKJtFboi42JSfYZ",
+  "staging": {
+    "dataset_revision": "7ff10fb7cf98a6b6f98abc0cd790dd6cc191226a",
+    "plan_sha256": "6f8a7c343a2c3e5c438223d00dfc7c9e5f59cfb9100841cb177845058e18680b",
+    "split_map_sha256": "7202e89aa9e92ace5c615c6fe0abea185c8f1c66da243ecd735eaf6658c3c7ed",
+    "speaker_identity_field": "channel",
+    "speaker_identity_is_proxy": true,
+    "split_summary": {
+      "test": {
+        "clips": 125,
+        "hours": 0.2594,
+        "speakers": 1
+      },
+      "train": {
+        "clips": 545,
+        "hours": 0.6954,
+        "speakers": 1
+      },
+      "val": {
+        "clips": 216,
+        "hours": 0.2848,
+        "speakers": 1
+      }
+    },
+    "available_stages": [
+      "full"
+    ],
+    "downloaded_train": 64,
+    "downloaded_val": 16,
+    "test_downloaded": 0
+  },
+  "training": {
+    "gpu_name": "NVIDIA A10",
+    "max_steps": 20,
+    "train_samples": 64,
+    "val_samples": 16,
+    "initial_train_loss": 3.9708614349365234,
+    "final_train_loss": 3.2582011222839355,
+    "mean_train_loss": 3.396064615249634,
+    "val_loss": 3.2909977436065674,
+    "cer": 1,
+    "wer": 1,
+    "blank_ratio": 0.7042492917847025,
+    "duration_sec": 70.69,
+    "raw_predictions": [
+      {
+        "hyp": "",
+        "ref": "tek tek hem taktiklerimi vereceğim hem de mental olarak kafamda neleri değiştirdim bunları size anlatacağım"
+      },
+      {
+        "hyp": "",
+        "ref": "şimdi öncelikle bu saat çalışmalar birincisi zorunda değilsiniz ikincisi de bu saatler doğuştan gelmiyor"
+      },
+      {
+        "hyp": "",
+        "ref": "herkes düşük saatlerden başlıyor"
+      },
+      {
+        "hyp": "",
+        "ref": "o yüzden videonun en baştığını bu şeyi hissetmeyin diye"
+      },
+      {
+        "hyp": "",
+        "ref": "ulan ben saat çalışamıyorum adam saat çalışıyormuş demeyin"
+      },
+      {
+        "hyp": "",
+        "ref": "bunlar öğrenilerek zamanla artarak giden şeyler"
+      },
+      {
+        "hyp": "",
+        "ref": "ilk başlarımda tabii ki ben de bir saat bile zor oturuyordum"
+      },
+      {
+        "hyp": "",
+        "ref": "ama şu an herhangi bir gün saat eğer çalışmam gerekiyoruz çalışabiliyorum"
+      },
+      {
+        "hyp": "",
+        "ref": "yks döneminde bunu her gün yapıyordum o yüzden bunlarla ilgili size taktiklerimi anlatacağım"
+      },
+      {
+        "hyp": "",
+        "ref": "şimdi öncelikle maksimum sürede ders çalışmak için ders çalışmak dışında yaptığımız her şeyi azaltmamız lazım"
+      },
+      {
+        "hyp": "",
+        "ref": "yani çevremizdeki bizim vaktimizi çalan her ne varsa onu azaltmamız lazım ki o süreyi derste değiştirelim"
+      },
+      {
+        "hyp": "",
+        "ref": "şimdi bu uçuk seviyelerde yemeği de azaltıyorsun falan filan"
+      },
+      {
+        "hyp": "",
+        "ref": "ama ya da yolda mesela çalışıyorsun"
+      },
+      {
+        "hyp": "",
+        "ref": "ben bunları da yapıyordum ama buralara girmeyeceğim o kadar derinlenmeye gerek yok"
+      },
+      {
+        "hyp": "",
+        "ref": "şimdi öncelikle bir telefon telefonum yoktu benim"
+      },
+      {
+        "hyp": "",
+        "ref": "tuş telefona geçtim sınav senemde iyi ki de geçmişim"
+      }
+    ]
+  },
+  "interpretation": [
+    "GitHub Actions repo secrets successfully authenticated Modal without exposing credential values.",
+    "Pinned HF staging, Modal Volume cache, A10 GPU allocation, canonical-size 512x4 Conformer forward/backward, CTC optimization, and validation metrics completed end-to-end.",
+    "Loss decreased over 20 steps, but all validation hypotheses were blank and CER/WER were 1.0; this is expectedly non-scientific for a random-init 20-step technical rehearsal.",
+    "No test samples were downloaded or evaluated.",
+    "This operation does not authorize c0.5 or any architecture/model-selection decision."
+  ],
+  "actual_cost_usd": null,
+  "cost_note": "Modal billing was not queried; do not infer cost from wall-clock duration."
+}

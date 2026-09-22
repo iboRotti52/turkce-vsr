@@ -1,0 +1,26 @@
+{
+  "0--5ZauH6J0": {
+    "speaker": "Diksiyon TV - Mennan Şahin",
+    "split": "train"
+  },
+  "2d2WCCLIxfA": {
+    "speaker": "Ada Genlik",
+    "split": "val"
+  },
+  "4wI_vZpYyMc": {
+    "speaker": "Sabahattin ÖNKİBAR",
+    "split": "test"
+  },
+  "DLiqfw12Gsg": {
+    "speaker": "Diksiyon TV - Mennan Şahin",
+    "split": "train"
+  },
+  "F7lTGCZofNA": {
+    "speaker": "Diksiyon TV - Mennan Şahin",
+    "split": "train"
+  },
+  "bX55e0NkaYw": {
+    "speaker": "Diksiyon TV - Mennan Şahin",
+    "split": "train"
+  }
+}

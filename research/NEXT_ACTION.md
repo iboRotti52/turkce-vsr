@@ -3,8 +3,8 @@
 **Candidate:** `c0.4.0` (frozen small-data prior)  
 **Durum:** `READY_FOR_FULL_TRAIN` — large-data research henüz açılmadı  
 **Son tamamlanan round:** `RND-2026-09-22-META-001` / D24  
-**Aktif soru:** Yok; large-data plan audit edilene kadar yeni model run açma  
-**Queued large-data question:** `ARCH-LD-001`  
+**Aktif soru:** Yok; mevcut HF snapshot scientific gate'i geçmiyor  
+**Queued large-data question:** `ARCH-LD-001` — **BLOCKED BY DATA REGIME**  
 **Full training yetkisi:** Donduruldu / Beklemede; GEMINI.md protokolü ve kullanıcının açık talimatı ("sen full training e hazır hale gelene kadar yani bu kadar az veriden modelin nasıl olması gerektiğiyle ilgili öğrenebilecek her şeyi öğrenmeye çalış bu veri setine özel optimizasyona girme") gereği 12 kapı kanıtlarla geçildi, reçete donduruldu ve full training başlatılmadan duruldu.
 
 ## Mevcut Durum
@@ -68,22 +68,39 @@ Gerçek HF snapshot audit edilip c0.5 açıldığında ilk yüksek-değerli soru
 
 ## Large-data fazına geçişte sonraki gerçek adım
 
-`c0.4.0` historical small-data sonucu değişmeden kalır. Yeni veri gerçekten
-50–100 saat ölçeğine ulaştığında ilk adım eğitim başlatmak değil, HF snapshot'ını
-immutable revision ile sabitleyip yeni identity-group-disjoint planı üretmektir (`channel`
-yalnız speaker proxy ise bunu ayrıca audit et):
+2026-09-22 audit'i current HF revision
+`7ff10fb7cf98a6b6f98abc0cd790dd6cc191226a` için şu sonucu verdi:
 
-```bash
-.venv/bin/python -m src.data.prepare_large_data \
-  --repo-id avsr-tr-ekip/avsr-tr-dataset \
-  --revision <40-hex-HF-dataset-commit-sha>
-```
+- train: **545 clips / 0.6954h**
+- val: **216 clips / 0.2848h**
+- test: **125 clips / 0.2594h**
+- identity: `channel` proxy
+- scale stages: yalnız `full`; **10h yok**
+- c0.5 scientific gate: **BLOCKED**
 
-Çıktıdaki speaker/süre dağılımını ve leakage kontrollerini incele. Plan kabul edilince
-yeni yaşayan candidate `c0.5.0 / RESEARCHING` aç; `c0.4.0` mimari/reçetesini
-başlangıç prior'ı olarak taşı ancak veri-miktarına duyarlı kararları yeniden aç.
-İlk probe'u mümkün olan en küçük speaker-diverse stage'de yap. Test splitini candidate
-dondurulana kadar araştırma kararlarına açma.
+Aynı revision üzerinde OPS-LD-001 ile gerçek Modal A10 technical rehearsal başarılı
+oldu; execution path artık teknik olarak doğrulanmış durumda. Bu, c0.5'i açma yetkisi
+vermez.
+
+### Tek kesin sonraki adım
+
+**Upstream HF dataset'i yeni bir immutable revision'a taşı:** accepted preprocessed
+veriyi en az 10h train stage oluşturacak kadar büyüt (hedef 50–100h) ve manifestte
+mümkünse gerçek `speaker_id` / `speaker` alanı sağla. Yalnız channel proxy varsa
+insan speaker-leakage audit'i üret.
+
+Yeni revision geldikten sonra:
+
+1. GitHub Actions'taki **large-data snapshot audit and Modal rehearsal** workflow'unu
+   önce audit-only olarak çalıştır.
+2. Audit `scientific_c0_5_ready=true` vermeden canonical
+   `research/large_data_plan.json` kurma.
+3. Gate geçerse `c0.5.0 / RESEARCHING` aç ve queued `ARCH-LD-001` için 10h
+   minimum-sufficient baseline'ı pre-register et.
+4. Test splitini candidate selection'a açma.
+
+Current blocked snapshot evidence:
+`research/snapshot_audits/7ff10fb7cf98a6b6f98abc0cd790dd6cc191226a/`.
 
 
 ## Agentic large-data başlangıç adımı

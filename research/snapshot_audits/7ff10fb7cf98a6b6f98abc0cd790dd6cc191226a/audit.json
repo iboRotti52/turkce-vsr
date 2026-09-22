@@ -1,0 +1,41 @@
+{
+  "dataset_revision": "7ff10fb7cf98a6b6f98abc0cd790dd6cc191226a",
+  "plan_sha256": "6f8a7c343a2c3e5c438223d00dfc7c9e5f59cfb9100841cb177845058e18680b",
+  "split_map_sha256": "7202e89aa9e92ace5c615c6fe0abea185c8f1c66da243ecd735eaf6658c3c7ed",
+  "speaker_identity_field": "channel",
+  "speaker_identity_is_proxy": true,
+  "split_summary": {
+    "test": {
+      "clips": 125,
+      "hours": 0.2594,
+      "speakers": 1
+    },
+    "train": {
+      "clips": 545,
+      "hours": 0.6954,
+      "speakers": 1
+    },
+    "val": {
+      "clips": 216,
+      "hours": 0.2848,
+      "speakers": 1
+    }
+  },
+  "available_stages": [
+    "full"
+  ],
+  "scientific_c0_5_ready": false,
+  "blockers": [
+    "proxy_speaker_identity_requires_audit",
+    "10h_minimum_sufficient_stage_unavailable"
+  ],
+  "test_split_used": false,
+  "source_workflow_run_id": 35782070031,
+  "source_workflow_artifact_id": 10718572892,
+  "source_workflow_artifact_sha256": "26e0e62c7ae3a65085fc217b96121ae34537d2a6235373cd9112027035dd7dc4",
+  "source_code_revision": "7c326ff7b065392acc856c1088e2c759eaf5f657",
+  "reproduction": {
+    "command": "python -m src.data.prepare_large_data --repo-id avsr-tr-ekip/avsr-tr-dataset --revision 7ff10fb7cf98a6b6f98abc0cd790dd6cc191226a",
+    "seed": 42
+  }
+}
