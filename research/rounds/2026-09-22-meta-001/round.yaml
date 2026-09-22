@@ -1,0 +1,69 @@
+round_id: RND-2026-09-22-META-001
+date: 2026-09-22
+round_type: retrospective_evidence_synthesis
+question_id: META-001
+candidate_context: c0.4.0
+evidence_scope: small_data_regime
+
+question: >
+  Does adding more clips inside the same limited speaker/source regime still improve
+  actual transcription quality, or are we already seeing a loss-vs-recognition
+  decoupling that signals a different bottleneck?
+
+hypothesis: >
+  If additional same-regime clips are still the dominant missing ingredient,
+  reductions in held-out CTC validation loss should co-occur with CER improvement.
+
+falsification_criteria: >
+  Validation loss improves materially while CER fails to improve in both the
+  canonical 60-clip scaling chain and the 385-clip long-sequence extension.
+
+evidence_inputs:
+  registry: experiments/registry.jsonl
+  registry_blob_sha: 36535b2266b9dd99e76ac6e2e940e23baff8bf33
+  experiment_ids:
+    - probe_train001_full_curriculum_unfreeze
+    - probe_curr002_sentence_scaling
+    - probe_confirm001_full_train_scaling
+    - probe_lowdata001_full_val_eval
+    - probe_lowdata003_sequence_bucketing
+
+analysis:
+  implementation: src/experiments/evidence_synthesis.py
+  result: research/rounds/2026-09-22-meta-001/result.json
+  cost_usd: 0.0
+  new_gpu_training: false
+  test_split_used: false
+
+scientific_verdict: REJECT
+decision_id: D24
+belief_id: B-SMALL-001
+
+updated_belief: >
+  In the frozen c0.4 small-data regime, more clips from the same limited
+  speaker/source pool can improve CTC likelihood without improving transcription
+  CER. Same-regime clip-count scaling is no longer a high-value next direction.
+
+revalidation_trigger: >
+  Re-open this belief after a substantially more diverse pinned HF snapshot is
+  available, or after an objective/architecture change materially changes the
+  loss-to-CER relationship.
+
+next_question: ARCH-LD-001
+
+literature_context:
+  - title: Auto-AVSR: Audio-Visual Speech Recognition with Automatic Labels
+    arxiv: "2303.14307"
+    role: Larger and automatically labelled training sets can improve VSR; motivates re-testing under genuinely broader data.
+  - title: Multilingual Audio-Visual Speech Recognition with Hybrid CTC/RNN-T Fast Conformer
+    arxiv: "2405.12983"
+    role: Keeps sequence objective/temporal modeling open when larger-scale data becomes available.
+  - title: Audio-Visual Efficient Conformer for Robust Speech Recognition
+    arxiv: "2301.01456"
+    role: Intermediate CTC/residual mechanisms motivate testing whether plain CTC is a large-data bottleneck.
+  - title: SwinLip
+    arxiv: "2505.04394"
+    role: Frontend efficiency/representation remains an alternative if large-data subgroup analysis points to visual encoding.
+  - title: VALLR
+    arxiv: "2503.21408"
+    role: Phoneme-centric plus language-model decomposition is a higher-confound alternative, not the first large-data probe.
