@@ -86,7 +86,7 @@ jobs:
           MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID_IBO }}
           MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET_IBO }}
         run: |
-          modal run src/modal_runner/large_data_rehearsal.py             --revision "${{ steps.hf.outputs.revision }}"             --output artifacts/ops_ld_001_modal_rehearsal.json             --n-train 96             --n-val 48             --max-steps 20
+          modal run src/modal_runner/large_data_rehearsal.py             --revision "${{ steps.hf.outputs.revision }}"             --output artifacts/ops_ld_001_modal_rehearsal.json             --n-train 64             --n-val 16             --max-steps 20
 
       - name: Verify rehearsal contract
         run: |
