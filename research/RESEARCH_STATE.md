@@ -108,3 +108,59 @@ Yeni research-memory katmanları:
 2. immutable reasoning rounds: `research/rounds/`,
 3. mutable current beliefs: `research/BELIEFS.yaml`,
 4. living candidate/action state: mevcut CANDIDATE / RESEARCH_STATE / NEXT_ACTION.
+
+## Large-data snapshot audit + OPS-LD-001 (2026-09-22)
+
+Gerçek HF Hub ve gerçek Modal GPU yolu ilk kez yeni large-data protokolü altında
+uçtan uca çalıştırıldı.
+
+### Pinned snapshot
+
+- dataset: `avsr-tr-ekip/avsr-tr-dataset`
+- revision: `7ff10fb7cf98a6b6f98abc0cd790dd6cc191226a`
+- plan hash: `6f8a7c343a2c3e5c438223d00dfc7c9e5f59cfb9100841cb177845058e18680b`
+- identity field: `channel` (**proxy**)
+- train: **545 clips / 0.6954h**
+- val: **216 clips / 0.2848h**
+- test: **125 clips / 0.2594h**
+- available scale stages: yalnız `full` (train 0.6954h)
+
+Bu snapshot için `c0.5.0` **açılmadı**. Scientific blockers:
+
+1. `proxy_speaker_identity_requires_audit`
+2. `10h_minimum_sufficient_stage_unavailable`
+
+Canonical `research/large_data_plan.json` bu nedenle git'e kurulmadı; audit
+`research/snapshot_audits/7ff10f.../` altında immutable kanıt olarak tutuluyor.
+
+### OPS-LD-001 technical rehearsal
+
+Scientific gate kapalıyken yalnız altyapıyı doğrulamak için gerçek Modal A10 üzerinde
+technical rehearsal çalıştırıldı:
+
+- 64 train / 16 val clip staged,
+- **0 test clip** indirildi,
+- canonical-size 512×4 Conformer + CTC ile 20 optimizer step,
+- initial loss **3.970861** → final loss **3.258201**,
+- val loss **3.290998**,
+- blank ratio **0.704249**,
+- CER/WER **1.0 / 1.0**,
+- GPU-stage duration **70.69s**.
+
+Bu sonuç **scientific model-selection evidence değildir** ve candidate/belief
+değiştirmez. Random initialization + 20-step rehearsal olduğundan boş prediction'lar
+beklenen teknik davranış sınırındadır.
+
+Kanıt:
+- `artifacts/operations/OPS-LD-001.json`
+- `research/operations/OPS-LD-001.md`
+- GitHub Actions run `35782070031`
+
+### Güncel large-data durumu
+
+- c0.4.0: frozen small-data prior.
+- c0.5.0: **NOT OPENED**.
+- ARCH-LD-001: **QUEUED / BLOCKED BY DATA REGIME**.
+- Modal execution path: **TECHNICALLY VERIFIED**.
+- Sonraki bilimsel model run: **yasak**, ta ki yeni HF revision 10h minimum stage ve
+  güvenilir speaker identity gate'lerini geçene kadar.
