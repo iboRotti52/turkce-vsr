@@ -37,14 +37,19 @@ D20, D21, D22 ve D23 kararları kapsamında düşük-veri rejimindeki mimari, ve
 ## Bütçe
 
 - Toplam izinli bulut bütçesi: 25.00 USD
-- Harcanan: ~2.73 USD
+- Bilinen tarihsel harcama: ~2.73 USD
   - Problar 1-27: ~$2.15 USD
   - `probe_lowdata001_full_val_eval` (Probe 28): $0.1245 USD
   - `probe_lowdata001_compact_conformer` (Probe 29): $0.0404 USD
   - `probe_lowdata002_valid_compact_conformer` (Probe 30): $0.0231 USD
   - `probe_lowdata003_sequence_bucketing` (Probe 31): $0.2971 USD
   - `probe_confirm003_seed123_training_stability` (Probe 32): $0.0999 USD
-- Kalan Bütçe: **~$22.27 USD**
+- `OPS-LD-001`: gerçek Modal A10 kullandı; GPU-stage 70.69s, fakat bu çalışma
+  ortamından Modal billing tutarı okunamadığı için **actual USD pending reconciliation**.
+- Güvenli kalan bütçe: **< $22.27 USD; exact değer Modal billing reconcile edilmeden
+  bilinmiyor.**
+- Yeni pahalı scientific run başlatmadan önce OPS-LD-001 actual cost'u bütçe ledger'ına
+  işle. Current data-regime blocker zaten c0.5 training'i ayrıca engelliyor.
 
 ## Readiness Durumu: READY_FOR_FULL_TRAIN (12/12 PASSED)
 
