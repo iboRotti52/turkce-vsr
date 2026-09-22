@@ -35,12 +35,18 @@ from src.experiments.research_governance import (
     require_clean_code_revision,
 )
 from src.experiments.tracker import ExperimentRecord, ExperimentTracker
+from src.experiments.research_round import (
+    validate_all_rounds,
+    validate_belief_ledger,
+)
 
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent.parent
 DEFAULT_CANDIDATE = ROOT / "configs" / "research_candidate.yaml"
 DEFAULT_PLAN = ROOT / "research" / "large_data_plan.json"
 DEFAULT_POLICY = ROOT / "configs" / "large_data_research.yaml"
+DEFAULT_ROUNDS = ROOT / "research" / "rounds"
+DEFAULT_BELIEFS = ROOT / "research" / "BELIEFS.yaml"
 
 
 @dataclass(frozen=True)
@@ -85,6 +91,8 @@ def evaluate_research_session(
     plan_path: pathlib.Path = DEFAULT_PLAN,
     policy_path: pathlib.Path = DEFAULT_POLICY,
     tracker: Optional[ExperimentTracker] = None,
+    rounds_root: Optional[pathlib.Path] = None,
+    beliefs_path: Optional[pathlib.Path] = None,
 ) -> ResearchSessionReport:
     """Reconcile candidate + plan + registry before any large-data research mutation."""
     blockers: List[str] = []
@@ -150,6 +158,39 @@ def evaluate_research_session(
 
     tracker = tracker or ExperimentTracker()
     records = tracker.load_all(strict=True)
+
+    # Research-memory V2 is fail-closed when present. Temporary/unit-test
+    # candidates outside the repository can omit it; the real repository cannot
+    # silently ignore a broken round/belief graph.
+    candidate_path = pathlib.Path(candidate_path)
+    inferred_root = (
+        candidate_path.parent.parent
+        if candidate_path.parent.name == "configs"
+        else candidate_path.parent
+    )
+    effective_rounds = pathlib.Path(rounds_root) if rounds_root else inferred_root / "research" / "rounds"
+    effective_beliefs = pathlib.Path(beliefs_path) if beliefs_path else inferred_root / "research" / "BELIEFS.yaml"
+    memory_present = effective_rounds.exists() or effective_beliefs.exists()
+    if memory_present:
+        if not effective_rounds.exists() or not effective_beliefs.is_file():
+            blockers.append("research_memory_incomplete")
+        else:
+            try:
+                rounds = validate_all_rounds(
+                    repo_root=inferred_root,
+                    rounds_root=effective_rounds,
+                    registry_path=tracker.registry_path,
+                )
+                validate_belief_ledger(
+                    effective_beliefs,
+                    valid_round_ids={str(item["round_id"]) for item in rounds},
+                )
+            except Exception as exc:
+                blockers.append(
+                    "research_memory_invalid:"
+                    f"{exc.__class__.__name__}:{str(exc)}"
+                )
+
     in_progress = [
         r
         for r in records

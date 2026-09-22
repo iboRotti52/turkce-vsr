@@ -1,0 +1,78 @@
+schema_version: 1
+updated_at: 2026-09-22
+purpose: >
+  Mutable ledger of the project's current scientific beliefs. Immutable evidence
+  stays in experiments/registry.jsonl and research/rounds; this file may change
+  when new evidence arrives.
+
+beliefs:
+  - id: B-SMALL-001
+    status: active
+    statement: >
+      In the frozen c0.4 small-data regime, increasing clip count inside the same
+      narrow speaker/source pool can reduce CTC validation loss without improving
+      transcription CER.
+    evidence_scope: small_data_regime
+    confidence: high_within_scope
+    evidence:
+      round_ids:
+        - RND-2026-09-22-META-001
+      decision_ids:
+        - D22
+        - D24
+      experiment_ids:
+        - probe_train001_full_curriculum_unfreeze
+        - probe_curr002_sentence_scaling
+        - probe_confirm001_full_train_scaling
+        - probe_lowdata001_full_val_eval
+        - probe_lowdata003_sequence_bucketing
+    implication: >
+      Do not spend another primary research round on more same-regime clip-count
+      scaling. Large-data work should test genuinely broader identity/source
+      diversity and keep sequence objective/model capacity open.
+    revalidation_trigger: >
+      Re-evaluate on the pinned large-data HF snapshot with substantially more
+      identity/source diversity, or after a sequence-objective/model change that
+      materially changes the loss-to-CER relationship.
+
+  - id: B-SMALL-002
+    status: active
+    statement: >
+      The c0.4 two-epoch optimum is reproducible across independent training seeds
+      in the frozen small-data regime.
+    evidence_scope: small_data_regime
+    confidence: medium_high_within_scope
+    evidence:
+      round_ids: []
+      decision_ids:
+        - D23
+      experiment_ids:
+        - probe_confirm001_full_train_scaling
+        - probe_confirm003_seed123_training_stability
+    implication: >
+      Treat c0.4 as a stable baseline prior for c0.5, not as a globally optimal
+      architecture.
+    revalidation_trigger: >
+      Re-evaluate after the data regime, optimizer/objective, or model family changes.
+
+  - id: B-PRIOR-001
+    status: active
+    statement: >
+      c0.4.0 is the best validated small-data prior, but no component of its
+      Conformer+CTC stack is immutable in the large-data phase.
+    evidence_scope: small_data_regime
+    confidence: high_as_process_rule
+    evidence:
+      round_ids:
+        - RND-2026-09-22-META-001
+      decision_ids:
+        - D23
+        - D24
+      experiment_ids: []
+    implication: >
+      Open c0.5 from the c0.4 recipe for control comparability, while allowing
+      evidence-driven replacement of frontend, temporal model, objective, tokenizer,
+      training recipe, decoder, and KWS.
+    revalidation_trigger: >
+      Re-evaluate whenever c0.5 large-data evidence clearly favors a different
+      component or model family.

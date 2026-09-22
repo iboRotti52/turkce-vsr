@@ -84,3 +84,27 @@ cost-aware scale controller eklenir.
 - Yeni önemli bulgular evidence scope + revalidation trigger ile kaydedilir.
 
 Large-data dataset planı audit edilmeden bu contract aktif eğitim yetkisi vermez.
+
+## Post-freeze evidence synthesis — META-001
+
+c0.4.0 frozen recipe ve D1-D23 değişmeden korunur. 2026-09-22 tarihinde yeni GPU
+training çalıştırmadan, immutable experiment registry üzerinde `META-001`
+retrospective scaling audit yapılmıştır.
+
+- Registry artık **32 model/diagnostic probe + 1 meta-synthesis record** içerir.
+- META-001 D24 olarak kaydedildi.
+- 360 → 720 → 1,325 clip scaling zincirinde validation loss iyileşirken CER
+  iyileşmemiştir.
+- 385-klip validation üzerinde long-clip extension da loss'u düşürmüş fakat CER'i
+  iyileştirmemiştir.
+- Yeni aktif belief: `B-SMALL-001` — frozen small-data rejiminde
+  optimization–recognition decoupling.
+- Bu bulgu c0.4 modelini değiştirmez; c0.5 large-data araştırma prior'ını ve soru
+  seçimini değiştirir.
+
+Yeni research-memory katmanları:
+
+1. immutable evidence: `experiments/registry.jsonl`,
+2. immutable reasoning rounds: `research/rounds/`,
+3. mutable current beliefs: `research/BELIEFS.yaml`,
+4. living candidate/action state: mevcut CANDIDATE / RESEARCH_STATE / NEXT_ACTION.

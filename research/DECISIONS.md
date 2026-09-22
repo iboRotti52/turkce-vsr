@@ -550,3 +550,50 @@ yeni karar, normal kanıt/gerekçe alanlarına ek olarak şunları açıkça ta�
 Bir small-data kararı sırf geçmişte ACCEPT edildi diye large-data'da değişmez kural
 olmaz. Aynı şekilde tek bir large-data snapshot sonucu da otomatik global mekanizma
 olarak sınıflandırılmaz.
+
+## D24: META-001 — Small-data Scaling Audit ve Optimization–Recognition Decoupling
+
+- **Tarih:** 2026-09-22
+- **Karar:** `REJECT` — "aynı dar speaker/source rejiminde daha fazla klip eklemek,
+  recognition kalitesini de iyileştirmeye devam eder" hipotezi reddedildi.
+- **Evidence Scope:** `small_data_regime`
+- **Kanıt:** `RND-2026-09-22-META-001`,
+  `research/rounds/2026-09-22-meta-001/result.json`.
+
+### Nicel sonuç
+
+Aynı 60-klip validation zincirinde:
+
+- 360 train clip, <=3.5s: Val Loss **2.8486**, CER **0.7492**
+- 720 train clip, <=6s: Val Loss **2.7851**, CER **0.7521**
+- 1,325 train clip, <=8s: Val Loss **2.7399**, CER **0.7561**
+
+360 → 1,325 arasında train exposure **3.68x** olurken Val Loss **%3.82**
+iyileşti; CER ise **+0.69 yüzde puan** kötüleşti.
+
+385-klip full-validation cross-check'te de aynı desen görüldü:
+
+- frozen c0.4: Val Loss **2.7989**, CER **0.7656**
+- 1,681 train clip + long-sequence bucketing: Val Loss **2.7530**,
+  CER **0.7663**
+
+Burada loss **%1.64** iyileşirken CER **+0.07 yüzde puan** kötüleşti.
+
+### Bilimsel çıkarım
+
+Frozen c0.4 rejiminde CTC objective ile gerçek transcription quality birbirinden
+ayrışmaya başlamıştır. Aynı sınırlı speaker/source havuzundan daha fazla klip eklemek
+likelihood optimizasyonunu iyileştirebilir fakat recognition bottleneck'ini çözmez.
+
+Bu karar **data scaling genel olarak işe yaramaz** anlamına gelmez. Yalnızca bir sonraki
+değerli scaling'in yeni identity/source/articulation çeşitliliği taşıması gerektiğini ve
+large-data fazında sequence objective/model capacity'nin açık soru olarak kalması
+gerektiğini söyler.
+
+- **Revalidation trigger:** Gerçek large-data HF snapshot anlamlı biçimde daha fazla
+  identity/source çeşitliliği sağladığında veya objective/model ailesi değiştiğinde
+  yeniden değerlendir.
+- **Sonraki soru:** `ARCH-LD-001` — daha çeşitli large-data rejiminde canonical
+  Conformer+plain-CTC stack'in loss→recognition ilişkisi korunuyor mu; yoksa düşük
+  confound'lu bir sequence-objective/temporal-model değişikliği gerçek recognition
+  kazanımı sağlıyor mu?

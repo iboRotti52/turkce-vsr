@@ -1,0 +1,84 @@
+{
+  "audit_id": "META-001",
+  "question_id": "META-001",
+  "evidence_scope": "small_data_regime",
+  "registry_blob_sha": "36535b2266b9dd99e76ac6e2e940e23baff8bf33",
+  "hypothesis": "If additional same-regime clips are still the dominant missing ingredient, reductions in held-out CTC validation loss should co-occur with CER improvement.",
+  "falsification_criteria": "Validation loss improves materially while CER fails to improve in both the canonical 60-clip scaling chain and the 385-clip long-sequence extension.",
+  "primary_chain": [
+    {
+      "experiment_id": "probe_train001_full_curriculum_unfreeze",
+      "train_samples": 360,
+      "val_samples": 60,
+      "max_duration": 3.5,
+      "best_val_loss": 2.8486,
+      "cer": 0.7492,
+      "blank_ratio": 0.8043,
+      "cost_usd": 0.0651
+    },
+    {
+      "experiment_id": "probe_curr002_sentence_scaling",
+      "train_samples": 720,
+      "val_samples": 60,
+      "max_duration": 6,
+      "best_val_loss": 2.7851,
+      "cer": 0.7521,
+      "blank_ratio": 0.859,
+      "cost_usd": 0.3311
+    },
+    {
+      "experiment_id": "probe_confirm001_full_train_scaling",
+      "train_samples": 1325,
+      "val_samples": 60,
+      "max_duration": 8,
+      "best_val_loss": 2.7399,
+      "cer": 0.7561,
+      "blank_ratio": 0.8666,
+      "cost_usd": 0.4475
+    }
+  ],
+  "primary_summary": {
+    "train_samples_start": 360,
+    "train_samples_end": 1325,
+    "train_samples_multiplier": 3.680556,
+    "best_val_loss_start": 2.8486,
+    "best_val_loss_end": 2.7399,
+    "best_val_loss_absolute_change": -0.1087,
+    "best_val_loss_relative_change_pct": -3.81591,
+    "cer_start": 0.7492,
+    "cer_end": 0.7561,
+    "cer_absolute_change": 0.0069,
+    "cer_percentage_point_change": 0.69,
+    "loss_improved": true,
+    "cer_improved": false,
+    "loss_monotonic_across_chain": true,
+    "cer_monotonic_across_chain": true
+  },
+  "full_validation_extension": {
+    "baseline_experiment_id": "probe_lowdata001_full_val_eval",
+    "extension_experiment_id": "probe_lowdata003_sequence_bucketing",
+    "validation_samples": 385,
+    "extension_train_samples": 1681,
+    "best_val_loss_baseline": 2.7989,
+    "best_val_loss_extension": 2.753,
+    "best_val_loss_absolute_change": -0.0459,
+    "best_val_loss_relative_change_pct": -1.63993,
+    "cer_baseline": 0.7656,
+    "cer_extension": 0.7663,
+    "cer_absolute_change": 0.0007,
+    "cer_percentage_point_change": 0.07,
+    "loss_improved": true,
+    "cer_improved": false
+  },
+  "scientific_verdict": "REJECT",
+  "result": "optimization_recognition_decoupling",
+  "updated_belief": "Within the frozen c0.4 small-data regime, adding more clips from the same limited speaker/source regime can reduce CTC validation loss without improving transcription CER. More same-regime clip-count scaling is therefore not a strong next research direction; speaker/source diversity and sequence objective/model capacity should remain open in the large-data phase.",
+  "revalidation_trigger": "Re-evaluate after the pinned large-data HF snapshot provides substantially more identity/source diversity, or after an objective/architecture change that materially changes the loss-to-CER relationship.",
+  "limitations": [
+    "This is a retrospective synthesis of frozen experiments, not a new model training run.",
+    "The primary chain has only three comparable scaling points.",
+    "The long-clip extension changes both training coverage and sequence batching.",
+    "The conclusion is scoped to the frozen small-data regime and must not be treated as global."
+  ],
+  "next_question": "ARCH-LD-001"
+}

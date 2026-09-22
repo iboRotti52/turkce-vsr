@@ -103,4 +103,41 @@
   - `train.csv` içindeki 356 klip ($> 8.0$s) elendiğinde toplam eğitim süresinin **%41.52'si (1.15 saat)** devre dışı kalmaktadır.
   - Bu 1.15 saatlik veri aynı 5 konuşmacıya ait olsa dahi zengin Türkçe sözcük dağarcığı, hece dizilimleri ve koartikülasyon varyasyonu içerir. Sequence bucketing veya padding-verimli dinamik batching ile bu verinin eğitime dahil edilmesi yüksek bilgi değerine sahiptir.
 
+## 2026-09-22 Large-data yön taraması
 
+Aşağıdaki kaynaklar META-001 kararının ampirik kanıtı değildir; c0.5'te hangi
+mekanizmaların açık tutulması gerektiğini belirleyen **literature context**'tir.
+
+### Auto-AVSR: Audio-Visual Speech Recognition with Automatic Labels
+- **ArXiv:** 2303.14307
+- Daha büyük ve otomatik etiketlenmiş AVSpeech/VoxCeleb2 verisinin VSR/AVSR
+  performansını iyileştirebildiğini gösterir.
+- **Projeye etkisi:** D24'ü "data scaling işe yaramaz" diye yorumlama; asıl yeniden
+  test edilmesi gereken şey **daha çeşitli data scaling**'dir.
+
+### Multilingual Audio-Visual Speech Recognition with Hybrid CTC/RNN-T Fast Conformer
+- **ArXiv:** 2405.12983
+- Fast Conformer üzerinde hybrid CTC/RNN-T ve daha büyük multilingual AV data kullanır.
+- **Projeye etkisi:** c0.5'te plain CTC objective kalıcı varsayım değildir. Ancak RNN-T
+  ilk probe için yüksek-confound olabilir; önce daha kontrollü objective değişiklikleri
+  tercih edilebilir.
+
+### Audio-Visual Efficient Conformer for Robust Speech Recognition
+- **ArXiv:** 2301.01456
+- Intermediate CTC losses ve residual conditioning ile CTC'nin conditional-independence
+  sınırlamasını azaltmaya çalışır.
+- **Projeye etkisi:** Eğer c0.5 baseline'da META-001'deki loss→CER ayrışması sürerse,
+  aynı Conformer ailesinde **Inter-CTC** düşük-confound ilk mekanizma probe'u olabilir.
+
+### SwinLip: An Efficient Visual Speech Encoder for Lip Reading Using Swin Transformer
+- **ArXiv:** 2505.04394
+- Daha verimli visual speech encoder alternatifi sunar.
+- **Projeye etkisi:** Large-data subgroup failure'ları visual representation'a işaret
+  ederse frontend ailesi yeniden açılmalıdır; bugün için kabul edilmiş değişiklik değildir.
+
+### VALLR: Visual ASR Language Model for Lip Reading
+- **ArXiv:** 2503.21408
+- Phoneme-centric visual recognition + language-model reconstruction yaklaşımı önerir.
+- **Projeye etkisi:** Viseme/phoneme ambiguity için güçlü fakat daha büyük kavramsal
+  değişikliktir; kontrollü c0.5 baseline/Inter-CTC sorularından sonra değerlendirilmesi
+  daha doğru olur.
