@@ -160,18 +160,31 @@ Belge veya deney kütüğündeki başarı iddialarını otomatik olarak doğru k
 
 Araştırma durumunu yalnızca konuşma bağlamında tutma. Repository'de aşağıdaki kayıtları oluştur veya mevcut yapıya uyarlayarak kullan:
 
+- `research/README.md`: evidence → round → belief → living state katmanlarının sözleşmesi.
+- `experiments/registry.jsonl`: immutable deney/probe gerçekleri; large-data deneylerinde candidate, data scale, evidence scope, promotion rule, estimated/actual GPU-hours ve maliyet de tutulur.
+- `research/rounds/<round-id>/`: tek araştırma turunun immutable reasoning snapshot'ı (`round.yaml`, `result.json`, `REPORT.md`).
+- `research/BELIEFS.yaml`: projenin güncel, mutable ve scope/revalidation taşıyan bilimsel inançları.
 - `research/RESEARCH_STATE.md`: hedef, mevcut durum, doğrulanmış bulgular, belirsizlikler, aktif deney, kalan bütçe ve aday adımlar.
 - `research/CANDIDATE.md`: tek yaşayan modelin güncel bileşenleri, eğitim reçetesi, kanıtları, açık soruları ve readiness durumu.
 - `research/ARCHITECTURE.md`: mevcut büyük mimari, alternatifler, bileşenler ve veri akışı.
-- `research/DECISIONS.md`: önemli kararlar, kanıtları ve kararı değiştirecek sonuçlar.
+- `research/DECISIONS.md`: önemli tarihsel kararlar, kanıtları ve kararı değiştirecek sonuçlar.
 - `research/FAILURE_ANALYSIS.md`: gerçek tahminler, hata örnekleri ve hata kümeleri.
 - `research/SOURCES.md`: incelenen birincil kaynaklar ve destekledikleri iddialar.
 - `research/SCALING_ANALYSIS.md`: büyük-veri ölçek davranışı, subgroup trendleri, promotion geçmişi ve scale-sensitive bulgular.
-- `experiments/registry.jsonl`: tüm deneylerin yapılandırılmış kayıtları; large-data deneylerinde candidate, data scale, evidence scope, promotion rule, estimated/actual GPU-hours ve maliyet de tutulur.
 - `research/NEXT_ACTION.md`: çalışma kesilirse uygulanacak tek ve kesin sonraki adım.
 - `configs/research_candidate.yaml`: kanonik modelin makine tarafından okunabilir, sürümlü reçetesi.
 
-Her önemli araştırma, deney veya karar sonrasında ilgili dosyaları güncelle. Konuşma bağlamı ile dosyalar çelişirse önce gerçek sistem durumunu kontrol et, sonra kalıcı dosyaları düzelt.
+Her önemli araştırma turunda güncelleme sırası şöyledir:
+
+1. Immutable experiment/artifact kanıtını kaydet.
+2. `research/rounds/` altında round snapshot'ını oluştur ve sonucu reproducible hale getir.
+3. Yeni kanıt mevcut inancı değiştiriyorsa `research/BELIEFS.yaml` içindeki belief'i ekle/güncelle; scope ve revalidation trigger yaz.
+4. Tarihsel olarak önemli seçim varsa yeni D kararı ekle; eski kararı silme.
+5. En son yaşayan candidate, RESEARCH_STATE ve NEXT_ACTION'ı güncelle.
+
+`src.experiments.research_round` doğrulamasını ve `research_ops` preflight'ını geçmeyen round/belief belleğiyle yeni large-data run başlatma.
+
+Konuşma bağlamı ile dosyalar çelişirse önce gerçek sistem durumunu kontrol et, sonra kalıcı dosyaları düzelt.
 
 ## 5. Otonom araştırma döngüsü
 
@@ -487,4 +500,4 @@ Görevin etkileyici görünen deneyler üretmek değil; gerçek veriden öğrene
 
 Bu dosya yüklendikten sonra kullanıcı aşağıdaki hedefi veya aynı anlamı taşıyan kısa bir hedefi verebilir:
 
-> Bu repository için `GEMINI.md` içinde tanımlanan otonom Türkçe VSR araştırma protokolünü uygula. Önce repository, `research/CANDIDATE.md`, `configs/research_candidate.yaml`, aktif işler, checkpoint'ler, güvenilir metrikler, veri split'leri ve kalan bütçeyi uzlaştır. Mevcut birkaç saatlik ve az konuşmacılı veri rejiminin sınırlarını her iddiada açıkça koru. Her anda tek kanonik araştırma modelini sürdür; kısa koşuları ayrı pilot modeller değil, bu modeldeki tek bir belirsizliği çözen geçici probe'lar olarak kullan. Modelin her bileşeni için mevcut stack ile sınırlanmadan VSR, video, ASR, self-supervised learning ve komşu alanlardaki birincil kaynakları araştır. Tek aktif yüksek bilgi değerli soruyu seç; bilimsel arama alanını mevcut mimariyle sınırlama. En ucuz ayırt edici probe'u ve büyük-veride minimum sufficient scale'i seç, çalıştır, sonuçlanana kadar takip et, ham çıktıları, subgroup hata kümelerini ve scaling behaviour'ı incele, `ACCEPT/REJECT/INCONCLUSIVE` bilimsel kararını scale action'dan ayır ve yalnız kanıtlanan değişikliği kanonik modele işle. Large-data scaling policy yalnız maliyet/ölçek yönetir, scientific search space'i daraltmaz. Küçük validation oynamaları için amaçsız hiperparametre varyasyonlarına sapma. Yüksek etkili belirsizlikler kapanıp confirmation ve dress rehearsal tamamlanarak full-training readiness koşullarının tamamı kanıtlanınca reçeteyi dondur. Kullanıcının güncel talimatı gereği full training'i başlatmadan dur ve raporla. Tek bir deney, alt görev, teknik başarı veya oturum sonunu hedefin tamamlanması sayma. Bütçe ya da protokoldeki gerçek durma koşullarından biri oluşana kadar otonom araştırma döngüsünü sürdür ve her aşamada kalıcı araştırma belleğini güncelle.
+> Bu repository için `GEMINI.md` içinde tanımlanan otonom Türkçe VSR araştırma protokolünü uygula. Önce repository, `research/README.md`, `research/BELIEFS.yaml`, en son `research/rounds/` kayıtları, `research/CANDIDATE.md`, `configs/research_candidate.yaml`, aktif işler, checkpoint'ler, güvenilir metrikler, veri split'leri ve kalan bütçeyi uzlaştır. Mevcut birkaç saatlik ve az konuşmacılı veri rejiminin sınırlarını her iddiada açıkça koru. Her anda tek kanonik araştırma modelini sürdür; kısa koşuları ayrı pilot modeller değil, bu modeldeki tek bir belirsizliği çözen geçici probe'lar olarak kullan. Modelin her bileşeni için mevcut stack ile sınırlanmadan VSR, video, ASR, self-supervised learning ve komşu alanlardaki birincil kaynakları araştır. Tek aktif yüksek bilgi değerli soruyu seç; bilimsel arama alanını mevcut mimariyle sınırlama. En ucuz ayırt edici probe'u ve büyük-veride minimum sufficient scale'i seç, çalıştır, sonuçlanana kadar takip et, ham çıktıları, subgroup hata kümelerini ve scaling behaviour'ı incele, `ACCEPT/REJECT/INCONCLUSIVE` bilimsel kararını scale action'dan ayır ve yalnız kanıtlanan değişikliği kanonik modele işle. Large-data scaling policy yalnız maliyet/ölçek yönetir, scientific search space'i daraltmaz. Küçük validation oynamaları için amaçsız hiperparametre varyasyonlarına sapma. Yüksek etkili belirsizlikler kapanıp confirmation ve dress rehearsal tamamlanarak full-training readiness koşullarının tamamı kanıtlanınca reçeteyi dondur. Kullanıcının güncel talimatı gereği full training'i başlatmadan dur ve raporla. Tek bir deney, alt görev, teknik başarı veya oturum sonunu hedefin tamamlanması sayma. Bütçe ya da protokoldeki gerçek durma koşullarından biri oluşana kadar otonom araştırma döngüsünü sürdür ve her aşamada kalıcı araştırma belleğini güncelle.
