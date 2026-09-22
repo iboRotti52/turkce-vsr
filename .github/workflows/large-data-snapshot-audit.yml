@@ -1,0 +1,74 @@
+name: large-data snapshot audit
+
+on:
+  push:
+    branches:
+      - research/arch-ld-001-modal-round
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install audit dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install "huggingface_hub>=0.23.0" "pyyaml>=6.0.1"
+
+      - name: Resolve immutable dataset revision
+        id: hf
+        shell: bash
+        run: |
+          python - <<'PY' > /tmp/revision.txt
+          from huggingface_hub import HfApi
+          info = HfApi().dataset_info("avsr-tr-ekip/avsr-tr-dataset")
+          sha = (info.sha or "").strip().lower()
+          if len(sha) != 40 or any(ch not in "0123456789abcdef" for ch in sha):
+              raise SystemExit(f"invalid dataset sha: {sha!r}")
+          print(sha)
+          PY
+          REV="$(cat /tmp/revision.txt)"
+          echo "revision=$REV" >> "$GITHUB_OUTPUT"
+          echo "Resolved revision: $REV"
+
+      - name: Build immutable large-data plan
+        run: |
+          python -m src.data.prepare_large_data             --repo-id avsr-tr-ekip/avsr-tr-dataset             --revision "${{ steps.hf.outputs.revision }}"             --output research/large_data_plan.json             --split-output data/metadata/split_map_large_data.json
+
+      - name: Audit identity and minimum sufficient scale
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          plan = json.loads(Path("research/large_data_plan.json").read_text())
+          print("identity_field:", plan.get("speaker_identity_field"))
+          print("identity_is_proxy:", plan.get("speaker_identity_is_proxy"))
+          print("split_summary:", json.dumps(plan.get("split_summary"), ensure_ascii=False))
+          print("stages:", list((plan.get("staged_subsets") or {}).keys()))
+
+          if plan.get("speaker_identity_is_proxy"):
+              raise SystemExit(
+                  "BLOCKED: only proxy speaker identity is available; "
+                  "speaker leakage audit is required before c0.5 training"
+              )
+          if "10h" not in (plan.get("staged_subsets") or {}):
+              raise SystemExit("BLOCKED: 10h stage is unavailable")
+          PY
+
+      - name: Upload audited plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: large-data-plan-${{ steps.hf.outputs.revision }}
+          path: |
+            research/large_data_plan.json
+            data/metadata/split_map_large_data.json
+          if-no-files-found: error
