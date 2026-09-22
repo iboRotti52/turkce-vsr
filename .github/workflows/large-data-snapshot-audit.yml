@@ -1,4 +1,4 @@
-name: large-data snapshot audit
+name: large-data snapshot audit and Modal rehearsal
 
 on:
   push:
@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 jobs:
-  snapshot-audit:
+  audit-and-rehearse:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -43,32 +43,73 @@ jobs:
         run: |
           python -m src.data.prepare_large_data             --repo-id avsr-tr-ekip/avsr-tr-dataset             --revision "${{ steps.hf.outputs.revision }}"             --output research/large_data_plan.json             --split-output data/metadata/split_map_large_data.json
 
-      - name: Audit identity and minimum sufficient scale
+      - name: Record scientific gate status
+        id: gate
         run: |
+          mkdir -p artifacts
           python - <<'PY'
           import json
           from pathlib import Path
 
           plan = json.loads(Path("research/large_data_plan.json").read_text())
-          print("identity_field:", plan.get("speaker_identity_field"))
-          print("identity_is_proxy:", plan.get("speaker_identity_is_proxy"))
-          print("split_summary:", json.dumps(plan.get("split_summary"), ensure_ascii=False))
-          print("stages:", list((plan.get("staged_subsets") or {}).keys()))
-
+          reasons = []
           if plan.get("speaker_identity_is_proxy"):
-              raise SystemExit(
-                  "BLOCKED: only proxy speaker identity is available; "
-                  "speaker leakage audit is required before c0.5 training"
-              )
+              reasons.append("proxy_speaker_identity_requires_audit")
           if "10h" not in (plan.get("staged_subsets") or {}):
-              raise SystemExit("BLOCKED: 10h stage is unavailable")
+              reasons.append("10h_minimum_sufficient_stage_unavailable")
+
+          payload = {
+              "dataset_revision": plan["dataset_revision"],
+              "plan_sha256": plan["plan_sha256"],
+              "split_map_sha256": plan["split_map_sha256"],
+              "speaker_identity_field": plan["speaker_identity_field"],
+              "speaker_identity_is_proxy": plan["speaker_identity_is_proxy"],
+              "split_summary": plan["split_summary"],
+              "available_stages": list((plan.get("staged_subsets") or {}).keys()),
+              "scientific_c0_5_ready": not reasons,
+              "blockers": reasons,
+              "test_split_used": False,
+          }
+          Path("artifacts/large_data_snapshot_audit.json").write_text(
+              json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+          )
+          print("SNAPSHOT_AUDIT_RESULT_BEGIN")
+          print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
+          print("SNAPSHOT_AUDIT_RESULT_END")
           PY
 
-      - name: Upload audited plan
+      - name: Install Modal CLI
+        run: pip install "modal>=1.1.0"
+
+      - name: Run pinned Modal A10G technical rehearsal
+        env:
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID_IBO }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET_IBO }}
+        run: |
+          modal run src/modal_runner/large_data_rehearsal.py             --revision "${{ steps.hf.outputs.revision }}"             --output artifacts/ops_ld_001_modal_rehearsal.json             --n-train 96             --n-val 48             --max-steps 20
+
+      - name: Verify rehearsal contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = json.loads(Path("artifacts/ops_ld_001_modal_rehearsal.json").read_text())
+          result = p["training"]
+          assert result["run_type"] == "technical_large_data_modal_rehearsal"
+          assert result["scientific_use_for_model_selection"] is False
+          assert result["scientific_verdict"] is None
+          assert result["test_split_used"] is False
+          assert p["staging"]["test_downloaded"] == 0
+          print("Technical rehearsal contract verified.")
+          PY
+
+      - name: Upload audit and rehearsal artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: large-data-plan-${{ steps.hf.outputs.revision }}
+          name: arch-ld-001-bootstrap-${{ steps.hf.outputs.revision }}
           path: |
             research/large_data_plan.json
             data/metadata/split_map_large_data.json
+            artifacts/large_data_snapshot_audit.json
+            artifacts/ops_ld_001_modal_rehearsal.json
           if-no-files-found: error
