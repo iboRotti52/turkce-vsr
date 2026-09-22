@@ -52,18 +52,18 @@ revalidation_trigger: >
 next_question: ARCH-LD-001
 
 literature_context:
-  - title: Auto-AVSR: Audio-Visual Speech Recognition with Automatic Labels
+  - title: "Auto-AVSR: Audio-Visual Speech Recognition with Automatic Labels"
     arxiv: "2303.14307"
     role: Larger and automatically labelled training sets can improve VSR; motivates re-testing under genuinely broader data.
-  - title: Multilingual Audio-Visual Speech Recognition with Hybrid CTC/RNN-T Fast Conformer
+  - title: "Multilingual Audio-Visual Speech Recognition with Hybrid CTC/RNN-T Fast Conformer"
     arxiv: "2405.12983"
     role: Keeps sequence objective/temporal modeling open when larger-scale data becomes available.
-  - title: Audio-Visual Efficient Conformer for Robust Speech Recognition
+  - title: "Audio-Visual Efficient Conformer for Robust Speech Recognition"
     arxiv: "2301.01456"
     role: Intermediate CTC/residual mechanisms motivate testing whether plain CTC is a large-data bottleneck.
-  - title: SwinLip
+  - title: "SwinLip"
     arxiv: "2505.04394"
     role: Frontend efficiency/representation remains an alternative if large-data subgroup analysis points to visual encoding.
-  - title: VALLR
+  - title: "VALLR"
     arxiv: "2503.21408"
     role: Phoneme-centric plus language-model decomposition is a higher-confound alternative, not the first large-data probe.
