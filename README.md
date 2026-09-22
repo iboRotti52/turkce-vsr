@@ -4,13 +4,26 @@ Bu proje, video akışlarından ses olmadan yalnızca dudak hareketlerini analiz
 
 > **Araştırma durumu (small-data fazı tamamlandı):** Kanonik model **`c0.4.0`**
 > `READY_FOR_FULL_TRAIN` aşamasındadır — 12/12 readiness kapısı kanıtlarla
-> geçildi (`research/RESEARCH_STATE.md`), 32 probe `experiments/registry.jsonl`
-> içinde kayıtlı, kararlar D1–D23 (`research/DECISIONS.md`). Kullanıcı talimatı
+> geçildi (`research/RESEARCH_STATE.md`). Registry 32 model/diagnostic probe +
+> 1 post-freeze evidence-synthesis kaydı içerir; kararlar artık D1–D24'tür.
+> META-001 sonucu ve yeni research-memory yapısı `research/rounds/`,
+> `research/BELIEFS.yaml` ve `research/README.md` altında tutulur. Kullanıcı talimatı
 > ve `GEMINI.md` protokolü gereği **full training başlatılmadan duruldu**;
 > test kümesi (617 klip) karantinadadır. Sonraki aşama, yeni/büyük ve daha
 > çeşitli veri rejiminde (`avsr-tr-ekip/avsr-tr-dataset`) **`c0.5.0` ile yeniden
 > doğrulamadır** — eski konuşmacı split'i yeni veride tekrar kullanılmaz.
 > Devir notu: [HANDOVER.md](HANDOVER.md).
+
+## Research memory V2
+
+Araştırma belleği artık dört katmana ayrılır: immutable experiment evidence,
+immutable research rounds, mutable scoped beliefs ve living candidate/action state.
+Başlangıç noktaları:
+
+- [research/README.md](research/README.md)
+- [research/BELIEFS.yaml](research/BELIEFS.yaml)
+- [docs/RESEARCH_ARCHITECTURE_V2.md](docs/RESEARCH_ARCHITECTURE_V2.md)
+- [META-001 report](research/rounds/2026-09-22-meta-001/REPORT.md)
 
 ## Antigravity ile otonom araştırmayı başlatma
 
