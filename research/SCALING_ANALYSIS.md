@@ -112,3 +112,22 @@ bilimsel arama alanını daraltmaz.
 Large-data HF snapshot henüz bu dosyada analiz edilmedi. İlk gerçek plan
 `src.data.prepare_large_data` ile üretilip audit edildikten sonra `c0.5.0 / RESEARCHING`
 açılır ve ilk scaling kayıtları buraya eklenir.
+
+## META-001 — Frozen small-data scaling audit (2026-09-22)
+
+Bu bölüm large-data scaling curve değildir; large-data fazına girerken kullanılacak
+**small-data prior**'ını nicel olarak özetler.
+
+| Evidence | Train clips | Validation | Best loss | CER |
+| --- | ---: | ---: | ---: | ---: |
+| TRAIN-001 accepted curriculum | 360 | 60 | 2.8486 | 0.7492 |
+| CURR-002 | 720 | 60 | 2.7851 | 0.7521 |
+| CONFIRM-001 | 1,325 | 60 | 2.7399 | 0.7561 |
+| c0.4 full-val eval | checkpoint | 385 | 2.7989 | 0.7656 |
+| LOWDATA-003 + long clips | 1,681 | 385 | 2.7530 | 0.7663 |
+
+**Observed pattern:** objective loss improves while CER is flat-to-worse.
+
+Bu eğri `B-SMALL-001` belief'ini oluşturdu fakat large-data için otomatik prediction
+değildir. İlk c0.5 baseline run'ında aynı loss-vs-CER ilişkisinin sürüp sürmediği
+özellikle kontrol edilmelidir.
