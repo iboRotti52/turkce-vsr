@@ -409,6 +409,22 @@ Promotion kuralları:
 
 Programatik doğrulama için `src.experiments.large_data_controller` kullan.
 
+### Technical rehearsal bilimsel round değildir
+
+Large-data scientific gate kapalıyken yalnız execution path doğrulamak için technical
+rehearsal yapılabilir. Bu tür operasyonlar:
+
+- `research/snapshot_audits/` ve `research/operations/` altında tutulur,
+- test splitini indirmez veya kullanmaz,
+- `scientific_verdict` üretmez,
+- BELIEFS/CANDIDATE/architecture kararı değiştirmez,
+- yalnız data staging, loader, model forward/backward, checkpoint/metrics ve remote
+  execution contract'ını doğrular.
+
+Technical rehearsal sonucu iyi veya kötü görünse bile bunu `ACCEPT/REJECT` bilimsel
+kararına çevirmek yasaktır. Scientific model-selection run ancak dataset planı
+large-data gate'lerini geçip c0.5 gerçekten açıldıktan sonra başlayabilir.
+
 ### Scaling behaviour resmi kanıt kaynağıdır
 
 Büyük veri yalnız daha yüksek nihai skor üretmek için kullanılmaz; model hakkında yeni bilgi
