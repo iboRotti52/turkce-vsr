@@ -1,0 +1,5 @@
+experiment_id: probe_arch_ld001_10h
+error: >
+  CUDA OOM after dataloader warmup.
+actual_gpu_hours: 0.2
+actual_cost_usd: 0.1

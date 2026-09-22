@@ -1,0 +1,20 @@
+source_experiment_id: probe_arch_ld001_10h
+target_experiment_id: probe_arch_ld001_25h
+to_scale: 25h
+
+promotion_rule_met: true
+evidence_refs:
+  - artifacts/probe_arch_ld001_10h/metrics.json
+  - artifacts/probe_arch_ld001_10h/failures.jsonl
+
+estimated_gpu_hours: 2.0
+estimated_cost_usd: 1.5
+
+# Required when the child still has a larger available stage.
+target_promotion_rule: >
+  Promote 25h to the next scale only if the WER gain persists and subgroup
+  stability remains acceptable.
+
+scale_sensitive_ambiguity: false
+why_larger_scale_resolves_ambiguity: ""
+skip_scale_justification: ""

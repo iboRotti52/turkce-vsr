@@ -65,14 +65,18 @@ deneyi doğrudan çalıştırma. Önce:
    yeni dataset/scaling bilgisi.
 2. En yüksek bilgi değerli **tek** model sorusunu seç; mevcut Conformer/CTC ailesiyle
    sınırlanma.
-3. `ScaleExperimentPlan` ile minimum sufficient scale, falsification criteria,
-   information-gain rationale, predeclared promotion rule ve estimated GPU-hours/USD yaz.
-4. `register_scale_experiment(...)` ile sonuç görülmeden `IN_PROGRESS` registry
-   kaydını oluştur.
-5. Sonucu raw outputs + subgroup failures ile incele; bilimsel verdict'i
-   `ACCEPT/REJECT/INCONCLUSIVE`, scale action'ını ayrıca kaydet.
-6. Scale promotion gerekiyorsa `validate_promotion_request(...)` ile source registry
-   kaydındaki önceden yazılmış rule'a karşı doğrula.
-7. Her scale sonucu sonrası `research/SCALING_ANALYSIS.md` dosyasını güncelle.
+3. Önce `python -m src.experiments.large_data_workflow --budget-usd 25 status`
+   ile registry + budget + active-run durumunu uzlaştır.
+4. `configs/large_data_register.example.yaml` üzerinden experiment spec'ini yaz;
+   minimum sufficient scale, falsification criteria, information-gain rationale,
+   predeclared promotion rule ve estimated GPU-hours/USD burada sabitlenir.
+5. `large_data_workflow register --spec ...` ile sonuç görülmeden `IN_PROGRESS`
+   registry kaydını oluştur. CLI clean git HEAD, candidate-recipe hash ve initializer
+   content hash'ini otomatik bağlar.
+6. Sonucu raw outputs + subgroup failures ile incele; `complete --spec ...` veya
+   teknik hata varsa `fail --spec ...` ile kaydet.
+7. Scale büyütmek gerekiyorsa `promote --spec ...` kullan; parent→child lineage,
+   target-stage provenance ve child'ın sonraki promotion rule'u birlikte mühürlenir.
+8. Her scale sonucu sonrası `research/SCALING_ANALYSIS.md` dosyasını güncelle.
 
 **Large-data scaling policy constrains experiment cost, not scientific search space.**

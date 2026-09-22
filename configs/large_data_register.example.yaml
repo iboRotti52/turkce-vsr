@@ -1,0 +1,38 @@
+experiment_id: probe_arch_ld001_10h
+question_id: ARCH-LD-001
+candidate_version: c0.5.0
+
+hypothesis: >
+  Alternative temporal encoder may improve long-sequence generalization.
+falsification_criteria: >
+  No reliable WER gain versus the canonical control, or a meaningful subgroup
+  regression on long utterances / held-out identity groups.
+expectation: >
+  Lower held-out WER without subgroup collapse.
+
+requested_scale: 10h
+minimum_sufficient_scale: 10h
+why_smaller_scale_is_insufficient: >
+  Smoke can validate tensors/gradients but cannot measure held-out WER.
+information_gain_rationale: >
+  10h contains enough identity and duration diversity to discriminate this
+  mechanism before spending on larger stages.
+
+promotion_rule: >
+  Promote only if relative WER improves by at least the predeclared threshold
+  and no protected subgroup materially regresses.
+evidence_scope: large_data_regime
+
+estimated_gpu_hours: 1.0
+estimated_cost_usd: 0.8
+
+execution:
+  seed: 42
+  initializer_id: auto-avsr-base
+  # Prefer a local immutable file when available; the CLI hashes it automatically.
+  initializer_path: checkpoints/auto_avsr_base.pt
+  # Or provide initializer_sha256 instead of initializer_path.
+  candidate_recipe_path: configs/research_candidate.yaml
+
+setup:
+  baseline_experiment_id: baseline_c05_10h
